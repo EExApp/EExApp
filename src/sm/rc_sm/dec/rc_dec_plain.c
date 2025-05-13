@@ -42,20 +42,6 @@ size_t next_pow2(size_t x)
 
 }
 
-rc_time_scheduling_ctrl_t rc_dec_ctrl_time_sched_plain(const byte_array_t* ba)                  // add time scheduling decoding
-{
-  assert(ba != NULL);
-  assert(ba->buf != NULL);
-  assert(ba->len == sizeof(time_scheduling_params_t));
-  
-  rc_time_scheduling_ctrl_t ret = {0};
-  
-  // Copy time scheduling parameters
-  memcpy(&ret.params, ba->buf, ba->len);
-  
-  return ret;
-}
-
 rc_event_trigger_t rc_dec_event_trigger_plain(size_t len, uint8_t const ev_tr[len])
 {
   rc_event_trigger_t ev = {0};
@@ -121,26 +107,11 @@ rc_ctrl_hdr_t rc_dec_ctrl_hdr_plain(size_t len, uint8_t const ctrl_hdr[len])
   return ret;
 }
 
-rc_ctrl_msg_t rc_dec_ctrl_msg_plain(const byte_array_t* ba, rc_ctrl_e type)                 // update control message decoding functions
+rc_ctrl_msg_t rc_dec_ctrl_msg_plain(size_t len, uint8_t const ctrl_msg[len])
 {
-  assert(ba != NULL);
-  assert(ba->buf != NULL);
-  
-  rc_ctrl_msg_t ret = {0};
-  ret.type = type;
-  
-  switch(type){
-    case RC_CTRL_SM_V0_SLICE:
-      ret.slice = rc_dec_ctrl_slice_plain(ba);
-      break;
-    // ... other cases
-    case RC_CTRL_SM_V0_TIME_SCHEDULING:
-      ret.time_sched = rc_dec_ctrl_time_sched_plain(ba);
-      break;
-    default:
-      assert(0 != 0 && "Unknown type");
-  }
-  
+  assert(len == sizeof(rc_ctrl_msg_t)); 
+  rc_ctrl_msg_t ret;
+  memcpy(&ret, ctrl_msg, len);
   return ret;
 }
 

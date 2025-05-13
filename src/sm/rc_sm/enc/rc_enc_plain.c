@@ -27,22 +27,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-byte_array_t rc_enc_ctrl_time_sched_plain(const rc_time_scheduling_ctrl_t* time_sched)          // add time scheduling encoding
-{ 
-  assert(time_sched != NULL);
-  
-  byte_array_t ba = {0};
-  ba.len = sizeof(time_scheduling_params_t);
-  ba.buf = malloc(ba.len);
-  assert(ba.buf != NULL && "Memory exhausted");
-  
-  // Copy time scheduling parameters to buffer
-  memcpy(ba.buf, &time_sched->params, ba.len);
-  
-  return ba;
-}
-
-
 byte_array_t rc_enc_event_trigger_plain(e2sm_rc_event_trigger_t const* event_trigger)
 {
   assert(event_trigger != NULL);
@@ -117,24 +101,17 @@ byte_array_t rc_enc_ctrl_hdr_plain(e2sm_rc_ctrl_hdr_t const* ctrl_hdr)
   return ba;
 }
 
-byte_array_t rc_enc_ctrl_msg_plain(const rc_ctrl_msg_t* ctrl_msg)                           // update the control message encoding
+byte_array_t rc_enc_ctrl_msg_plain(rc_ctrl_msg_t const* ctrl_msg)
 {
   assert(ctrl_msg != NULL);
-  
-  byte_array_t ba = {0};
-  
-  switch(ctrl_msg->type){
-    case RC_CTRL_SM_V0_SLICE:
-      ba = rc_enc_ctrl_slice_plain(&ctrl_msg->slice);
-      break;
-    // ... other cases
-    case RC_CTRL_SM_V0_TIME_SCHEDULING:
-      ba = rc_enc_ctrl_time_sched_plain(&ctrl_msg->time_sched);
-      break;
-    default:
-      assert(0 != 0 && "Unknown ctrl_msg->type");
-  }
-  
+
+  byte_array_t  ba = {0};
+  ba.buf = malloc(sizeof(rc_ctrl_msg_t)); 
+  assert(ba.buf != NULL && "Memory exhausted");
+
+  memcpy(ba.buf, ctrl_msg, sizeof(rc_ctrl_msg_t));
+
+  ba.len = sizeof(rc_ctrl_msg_t);
   return ba;
 }
 

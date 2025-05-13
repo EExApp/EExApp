@@ -53,7 +53,5 @@ byte_array_t rc_enc_ctrl_out_plain(e2sm_rc_ctrl_out_t const*);
 
 byte_array_t rc_enc_func_def_plain(e2sm_rc_func_def_t const*);
 
-byte_array_t rc_enc_ctrl_time_sched_plain(const rc_time_scheduling_ctrl_t* time_sched);                     // add
-
 #endif
 

@@ -98,7 +98,7 @@ bool try_stop_xapp_api(void)
   return true;
 }
 
-e2_node_arr_xapp_t e2_nodes_xapp_api(void)
+e2_node_arr_t e2_nodes_xapp_api(void)
 {
   assert(xapp != NULL);
   
@@ -185,54 +185,4 @@ sm_ans_xapp_t control_sm_xapp_api(global_e2_node_id_t* id, uint32_t ran_func_id,
   return control_sm_sync_xapp(xapp, id, ran_func_id, wr);
 }
 
-PyObject* py_rc_time_scheduling_ctrl(PyObject* self, PyObject* args)      // add
-{
-  uint32_t ran_func_id;
-  uint8_t a, b, c;
-  
-  if(!PyArg_ParseTuple(args, "IBBB", &ran_func_id, &a, &b, &c))
-    return NULL;
-  
-  // Validate parameters
-  uint8_t total = a + b + c;
-  if(total != 10) {
-    PyErr_SetString(PyExc_ValueError, "Time scheduling parameters must sum to 10");
-    return NULL;
-  }
-  
-  // Create the time scheduling control message
-  time_scheduling_params_t params = {0};
-  params.a = a;
-  params.b = b;
-  params.c = c;
-  
-  // Get the list of E2 nodes
-  e2_node_arr_xapp_t nodes = e2_nodes_xapp_api();
-  
-  // Find the node with the specified RAN function ID
-  global_e2_node_id_t* node_id = NULL;
-  for (int i = 0; i < nodes.len; i++) {
-    for (int j = 0; j < nodes.n[i].len_rf; j++) {
-      if (nodes.n[i].ack_rf[j].id == ran_func_id) {
-        node_id = &nodes.n[i].id;
-        break;
-      }
-    }
-    if (node_id != NULL) break;
-  }
-  
-  if (node_id == NULL) {
-    PyErr_SetString(PyExc_ValueError, "No E2 node found with the specified RAN function ID");
-    return NULL;
-  }
-  
-  // Use the existing control_sm_xapp_api function
-  rc_ctrl_msg_t ctrl_msg = {0};
-  ctrl_msg.type = RC_CTRL_SM_V0_TIME_SCHEDULING;
-  ctrl_msg.time_sched.params = params;
-  
-  sm_ans_xapp_t ans = control_sm_xapp_api(node_id, ran_func_id, &ctrl_msg);
-  
-  // Return the success/failure status
-  return PyLong_FromLong(ans.success);
-}
+

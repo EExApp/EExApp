@@ -45,8 +45,6 @@ e2sm_rc_ctrl_out_t rc_dec_ctrl_out_plain(size_t len, uint8_t const ctrl_out[len]
 
 e2sm_rc_func_def_t rc_dec_func_def_plain(size_t len, uint8_t const func_def[len]);
 
-rc_time_scheduling_ctrl_t rc_dec_ctrl_time_sched_plain(const byte_array_t* ba);             // add
-
 #endif
 
 

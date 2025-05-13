@@ -112,47 +112,6 @@ extern "C" {
 #include "ir/ran_func_def_ctrl.h"
 #include "ir/ran_func_def_policy.h"
 
-/////////////////////////////////////
-// time scheduling struct definition                                              (add)
-/////////////////////////////////////
-typedef struct {
-  uint8_t a;  // First active period (subframes)
-  uint8_t b;  // Sleep period (subframes)
-  uint8_t c;  // Second active period (subframes)
-} time_scheduling_params_t;
-
-// Time scheduling control message
-typedef struct {
-  time_scheduling_params_t params;
-} rc_time_scheduling_ctrl_t;
-
-// Add to the control type enum
-typedef enum {
-  RC_CTRL_SM_V0_SLICE = 0,
-  RC_CTRL_SM_V0_MAC = 1,
-  RC_CTRL_SM_V0_RLC = 2,
-  RC_CTRL_SM_V0_PDCP = 3,
-  RC_CTRL_SM_V0_TIME_SCHEDULING = 4, // New control type
-  // ... other existing types
-} rc_ctrl_e;
-
-// Update the control message union
-typedef struct {
-  union {
-    // Existing control message types
-    rc_slice_ctrl_t slice;
-    rc_mac_ctrl_t mac;
-    rc_rlc_ctrl_t rlc;
-    rc_pdcp_ctrl_t pdcp;
-    // New control message type for time scheduling
-    rc_time_scheduling_ctrl_t time_sched;
-  };
-  
-  // Type of control message
-  rc_ctrl_e type;
-} rc_ctrl_msg_t;
-
-
 //////////////////////////////////////
 // RIC Event Trigger Definition
 /////////////////////////////////////

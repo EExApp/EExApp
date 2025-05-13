@@ -75,9 +75,6 @@ void rm_report_sm_xapp_api(int const handle);
 // return void but sm_ag_if_ans_ctrl_t should be returned. Add it in the future if needed
 sm_ans_xapp_t control_sm_xapp_api(global_e2_node_id_t* id, uint32_t rf_id, void* wr);
 
-// time scheduling ctrl function in .c
-PyObject* py_rc_time_scheduling_ctrl(PyObject* self, PyObject* args);                   // add
-
 #ifdef __cplusplus
 }
 #endif
