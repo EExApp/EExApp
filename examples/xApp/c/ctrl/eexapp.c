@@ -459,28 +459,46 @@ static
 void log_int_value(byte_array_t name, meas_record_lst_t meas_record)
 {
   fout_kpm = fopen(filename, mode);
-  if (cmp_str_ba("RRU.PrbTotDl", name) == 0) {
+  byte_array_t test_name = cp_str_to_ba("RRU.PrbTotDl");
+  if (eq_byte_array(&test_name, &name)) {
     //printf("RRU.PrbTotDl = %d [PRBs]\n", meas_record.int_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%d ", meas_record.int_val);
     fclose(fout_kpm);
-  } else if (cmp_str_ba("RRU.PrbTotUl", name) == 0) {
-    //printf("RRU.PrbTotUl = %d [PRBs]\n", meas_record.int_val);
-    fseek(fout_kpm, 0, SEEK_SET);
-    fprintf(fout_kpm, "%d\n", meas_record.int_val);
-    fclose(fout_kpm);
-  } else if (cmp_str_ba("DRB.PdcpSduVolumeDL", name) == 0) {
-    //printf("DRB.PdcpSduVolumeDL = %d [kb]\n", meas_record.int_val);
-    fseek(fout_kpm, 0, SEEK_SET);
-    fprintf(fout_kpm, "%d ", meas_record.int_val);
-    fclose(fout_kpm);
-  } else if (cmp_str_ba("DRB.PdcpSduVolumeUL", name) == 0) {
-    //printf("DRB.PdcpSduVolumeUL = %d [kb]\n", meas_record.int_val);
-    fseek(fout_kpm, 0, SEEK_SET);
-    fprintf(fout_kpm, "%d ", meas_record.int_val);
-    fclose(fout_kpm);
+    free_byte_array(test_name);
   } else {
-    printf("Measurement Name not yet supported\n");
+    free_byte_array(test_name);
+    test_name = cp_str_to_ba("RRU.PrbTotUl");
+    if (eq_byte_array(&test_name, &name)) {
+      //printf("RRU.PrbTotUl = %d [PRBs]\n", meas_record.int_val);
+      fseek(fout_kpm, 0, SEEK_SET);
+      fprintf(fout_kpm, "%d\n", meas_record.int_val);
+      fclose(fout_kpm);
+      free_byte_array(test_name);
+    } else {
+      free_byte_array(test_name);
+      test_name = cp_str_to_ba("DRB.PdcpSduVolumeDL");
+      if (eq_byte_array(&test_name, &name)) {
+        //printf("DRB.PdcpSduVolumeDL = %d [kb]\n", meas_record.int_val);
+        fseek(fout_kpm, 0, SEEK_SET);
+        fprintf(fout_kpm, "%d ", meas_record.int_val);
+        fclose(fout_kpm);
+        free_byte_array(test_name);
+      } else {
+        free_byte_array(test_name);
+        test_name = cp_str_to_ba("DRB.PdcpSduVolumeUL");
+        if (eq_byte_array(&test_name, &name)) {
+          //printf("DRB.PdcpSduVolumeUL = %d [kb]\n", meas_record.int_val);
+          fseek(fout_kpm, 0, SEEK_SET);
+          fprintf(fout_kpm, "%d ", meas_record.int_val);
+          fclose(fout_kpm);
+          free_byte_array(test_name);
+        } else {
+          free_byte_array(test_name);
+          printf("Measurement Name not yet supported\n");
+        }
+      }
+    }
   }
 }
 
@@ -488,23 +506,36 @@ static
 void log_real_value(byte_array_t name, meas_record_lst_t meas_record)
 {
   fout_kpm = fopen(filename, mode);
-  if (cmp_str_ba("DRB.RlcSduDelayDl", name) == 0) {
+  byte_array_t test_name = cp_str_to_ba("DRB.RlcSduDelayDl");
+  if (eq_byte_array(&test_name, &name)) {
     //printf("DRB.RlcSduDelayDl = %.2f [μs]\n", meas_record.real_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%.2f ", meas_record.real_val);
     fclose(fout_kpm);
-  } else if (cmp_str_ba("DRB.UEThpDl", name) == 0) {
-    //printf("DRB.UEThpDl = %.2f [kbps]\n", meas_record.real_val);
-    fseek(fout_kpm, 0, SEEK_SET);
-    fprintf(fout_kpm, "%.2f ", meas_record.real_val);
-    fclose(fout_kpm);
-  } else if (cmp_str_ba("DRB.UEThpUl", name) == 0) {
-    //printf("DRB.UEThpUl = %.2f [kbps]\n", meas_record.real_val);
-    fseek(fout_kpm, 0, SEEK_SET);
-    fprintf(fout_kpm, "%.2f ", meas_record.real_val);
-    fclose(fout_kpm);
+    free_byte_array(test_name);
   } else {
-    printf("Measurement Name not yet supported\n");
+    free_byte_array(test_name);
+    test_name = cp_str_to_ba("DRB.UEThpDl");
+    if (eq_byte_array(&test_name, &name)) {
+      //printf("DRB.UEThpDl = %.2f [kbps]\n", meas_record.real_val);
+      fseek(fout_kpm, 0, SEEK_SET);
+      fprintf(fout_kpm, "%.2f ", meas_record.real_val);
+      fclose(fout_kpm);
+      free_byte_array(test_name);
+    } else {
+      free_byte_array(test_name);
+      test_name = cp_str_to_ba("DRB.UEThpUl");
+      if (eq_byte_array(&test_name, &name)) {
+        //printf("DRB.UEThpUl = %.2f [kbps]\n", meas_record.real_val);
+        fseek(fout_kpm, 0, SEEK_SET);
+        fprintf(fout_kpm, "%.2f ", meas_record.real_val);
+        fclose(fout_kpm);
+        free_byte_array(test_name);
+      } else {
+        free_byte_array(test_name);
+        printf("Measurement Name not yet supported\n");
+      }
+    }
   }
 }
 
@@ -630,7 +661,7 @@ label_info_lst_t fill_kpm_label(void)
 {
   label_info_lst_t label_item = {0};
 
-  label_item.noLabel = ecalloc(1, sizeof(enum_value_e));
+  label_item.noLabel = calloc(1, sizeof(enum_value_e));
   *label_item.noLabel = TRUE_ENUM_VALUE;
 
   return label_item;
@@ -660,7 +691,7 @@ kpm_act_def_format_1_t fill_act_def_frm_1(ric_report_style_item_t const* report_
     // [1, 2147483647]
     // 8.3.11
     meas_item->label_info_lst_len = 1;
-    meas_item->label_info_lst = ecalloc(1, sizeof(label_info_lst_t));
+    meas_item->label_info_lst = calloc(1, sizeof(label_info_lst_t));
     meas_item->label_info_lst[0] = fill_kpm_label();
   }
 
@@ -744,7 +775,7 @@ kpm_sub_data_t gen_kpm_subs(kpm_ran_function_def_t const* ran_func)
 }
 
 static
-bool eq_sm(sm_ran_function_t const* elem, int const id)
+bool eq_sm(ran_function_t const* elem, int const id)
 {
   if (elem->id == id)
     return true;
@@ -753,7 +784,7 @@ bool eq_sm(sm_ran_function_t const* elem, int const id)
 }
 
 static
-size_t find_sm_idx(sm_ran_function_t* rf, size_t sz, bool (*f)(sm_ran_function_t const*, int const), int const id)
+size_t find_sm_idx(ran_function_t* rf, size_t sz, bool (*f)(ran_function_t const*, int const), int const id)
 {
   for (size_t i = 0; i < sz; i++) {
     if (f(&rf[i], id))
@@ -850,8 +881,8 @@ int main(int argc, char *argv[])
   init_xapp_api(&args);
   sleep(1);
 
-  e2_node_arr_xapp_t nodes = e2_nodes_xapp_api();
-  defer({ free_e2_node_arr_xapp(&nodes); });
+  e2_node_arr_t nodes = e2_nodes_xapp_api();
+  defer({ free_e2_node_arr(&nodes); });
 
   assert(nodes.len > 0);
   printf("[KPM MAC SLICE]: Connected E2 nodes = %d\n", nodes.len);
@@ -908,11 +939,11 @@ int main(int argc, char *argv[])
   ////////////
 
   for (int i = 0; i < nodes.len; i++) {
-    e2_node_connected_xapp_t* n = &nodes.n[i];
-
+    e2_node_connected_t* n = &nodes.n[i];
     //*********************************************MAC ENGIN *******************************
     for (size_t j = 0; j < n->len_rf; j++)
-      printf("Registered node %d ran func id = %d \n ", i, n->rf[j].id);
+      printf("Registered node %d ran func id = %d \n ", i, n->ack_rf[j].id);
+      // n->ack_rf[j].id -> RAN functions that are acknowledged by the node
 
     if(n->id.type == ngran_gNB || n->id.type == ngran_eNB){
       // MAC Control is not yet implemented in OAI RAN
@@ -952,18 +983,19 @@ int main(int argc, char *argv[])
 
     //********************************************KPM BEGIN*********************************
 
-    size_t const idx = find_sm_idx(n->rf, n->len_rf, eq_sm, KPM_ran_function);
-    assert(n->rf[idx].defn.type == KPM_RAN_FUNC_DEF_E && "KPM is not the received RAN Function");
+    size_t const idx = find_sm_idx(n->ack_rf, n->len_rf, eq_sm, KPM_ran_function);
     // if REPORT Service is supported by E2 node, send SUBSCRIPTION
     // e.g. OAI CU-CP
     //if (n->rf[idx].defn.kpm.ric_report_style_list != NULL) {
      // Generate KPM SUBSCRIPTION message
-     kpm_sub_data_t kpm_sub = gen_kpm_subs(&n->rf[idx].defn.kpm);
+    assert(n->ack_rf[idx].id == KPM_ran_function && "KPM is not the received RAN Function");
+    
+    // Generate KPM subscription data
+    kpm_sub_data_t kpm_sub = gen_kpm_subs((kpm_ran_function_def_t*)&n->ack_rf[idx].defn);
 
-     hndl[i] = report_sm_xapp_api(&n->id, KPM_ran_function, &kpm_sub, sm_cb_kpm);
-     assert(hndl[i].success == true);
-     //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-     free_kpm_sub_data(&kpm_sub);
+    hndl[i] = report_sm_xapp_api(&n->id, KPM_ran_function, &kpm_sub, sm_cb_kpm);
+    assert(hndl[i].success == true);
+    free_kpm_sub_data(&kpm_sub);
 
   //}
   //***************************************************KPM END****************************
