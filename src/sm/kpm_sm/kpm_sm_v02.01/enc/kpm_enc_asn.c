@@ -49,27 +49,23 @@ byte_array_t encode(void* pdu, e2sm_kpm_e e)
   //xer_fprint(stderr, &, pdu);
   //fflush(stdout);
 
-  // XXX-tuning: 
-  // below bytearray sizing needs to be reviewed and made dynamic. It looks too small for the general case of action definition.
-  byte_array_t ba = {.buf = malloc(2048), .len = 2048}; 
   const enum asn_transfer_syntax syntax = ATS_ALIGNED_BASIC_PER;
-  asn_enc_rval_t er = {0};
+  asn_encode_to_new_buffer_result_t er = {0};
   if(e == E2SM_KPM_EVENT_TRIGGER_DEFINITION_ENUM)
-    er = asn_encode_to_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_EventTriggerDefinition, pdu, ba.buf, ba.len);
+    er = asn_encode_to_new_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_EventTriggerDefinition, pdu);
   else if(e == E2SM_KPM_ACTION_DEFINITION_ENUM)
-    er = asn_encode_to_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_ActionDefinition, pdu, ba.buf, ba.len);
+    er = asn_encode_to_new_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_ActionDefinition, pdu);
   else if(e == E2SM_KPM_INDICATION_HEADER_ENUM)
-    er = asn_encode_to_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_IndicationHeader, pdu, ba.buf, ba.len);
+    er = asn_encode_to_new_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_IndicationHeader, pdu);
   else if(e == E2SM_KPM_INDICATION_MESSAGE_ENUM)
-    er = asn_encode_to_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_IndicationMessage, pdu, ba.buf, ba.len);
+    er = asn_encode_to_new_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_IndicationMessage, pdu);
   else if(e == E2SM_KPM_RAN_FUNCTION_DESCRIPTION_ENUM)
-    er = asn_encode_to_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_RANfunction_Description, pdu, ba.buf, ba.len);
+    er = asn_encode_to_new_buffer(NULL, syntax, &asn_DEF_E2SM_KPM_RANfunction_Description, pdu);
   else
     assert(0!=0 && "Unknown KPM_ENUM");
 
-
-  assert(er.encoded > -1 && (size_t)er.encoded <= ba.len);
-  ba.len = er.encoded;
+  assert(er.buffer != NULL && er.result.encoded > 0 && "Failed to encode.");
+  byte_array_t ba = {.buf = er.buffer, .len = er.result.encoded};
 
   return ba;
 }

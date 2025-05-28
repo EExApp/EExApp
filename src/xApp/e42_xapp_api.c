@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <limits.h>
 
 static
 e42_xapp_t* xapp = NULL;
@@ -42,16 +43,30 @@ e42_xapp_t* xapp = NULL;
 static
 pthread_t thrd_xapp;
 
+static
+atomic_bool stop_xapp = false;
+
+static
+void xapp_unblock_wait_api(void)
+{
+  stop_xapp = true;
+}
+
+void xapp_wait_end_api(void)
+{
+  const char* value = getenv("XAPP_DURATION");
+  int timeout = value ? atoi(value) : 20;
+
+  while (!stop_xapp && (timeout < 0 || timeout-- > 0))
+    sleep(1);
+}
 
 static
 void sig_handler(int sig_num)
 {
   printf("\n[xApp]:Abruptly ending with signal number = %d\n", sig_num);
 
-  while(try_stop_xapp_api() == false)
-    usleep(1000);
-
-   exit(EXIT_FAILURE);
+  xapp_unblock_wait_api();
 }
 
 static inline
@@ -70,6 +85,7 @@ void init_xapp_api(fr_args_t const* args)
 
   // Signal handler
   signal(SIGINT, sig_handler);
+  signal(SIGTERM, sig_handler);
 
   xapp = init_e42_xapp(args);
 
@@ -94,11 +110,11 @@ bool try_stop_xapp_api(void)
 
   int const rc = pthread_join(thrd_xapp, NULL);
   assert(rc == 0);
-  printf("[xApp]: Sucessfully stopped \n");
+  printf("[xApp]: Successfully stopped \n");
   return true;
 }
 
-e2_node_arr_t e2_nodes_xapp_api(void)
+e2_node_arr_xapp_t e2_nodes_xapp_api(void)
 {
   assert(xapp != NULL);
   

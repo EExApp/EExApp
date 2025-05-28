@@ -887,8 +887,8 @@ int main(int argc, char *argv[])
   init_xapp_api(&args);
   sleep(1);
 
-  e2_node_arr_t nodes = e2_nodes_xapp_api();
-  defer({ free_e2_node_arr(&nodes); });
+  e2_node_arr_xapp_t nodes = e2_nodes_xapp_api();
+  defer({ free_e2_node_arr_xapp(&nodes); });
   assert(nodes.len > 0);
 
   printf("Connected E2 nodes = %d\n", nodes.len);
@@ -910,7 +910,7 @@ int main(int argc, char *argv[])
   {
 
     for (size_t j = 0; j < nodes.n[i].len_rf; j++)
-      printf("Registered node ID %d ran func id = %d \n ", nodes.n[i].id.nb_id.nb_id, nodes.n[i].ack_rf[j].id);
+      printf("Registered node ID %d ran func id = %d \n ", nodes.n[i].id.nb_id.nb_id, nodes.n[i].rf[j].id);
 
     // RC REPORT Service Style 2: Call Process Outcome
     rc_sub_data_t rc_sub = gen_rc_sub_style_2();

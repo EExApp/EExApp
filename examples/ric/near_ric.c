@@ -20,7 +20,7 @@
  */
 
 
-#include "../../src/ric/near_ric_api.h"                   // FlexRIC's internal header that likely provides the RIC API functions
+#include "../../src/ric/near_ric_api.h"
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -34,14 +34,12 @@
 #include <time.h>
 #include <unistd.h>
 
-// constants define unique IDs for RAN functions
-// these IDs are how RIC knows what function each app is serving
-const uint16_t MAC_ran_func_id = 142;                     // Key performance measurement function
-const uint16_t RLC_ran_func_id = 143;                     
+const uint16_t MAC_ran_func_id = 142;
+const uint16_t RLC_ran_func_id = 143;
 const uint16_t PDCP_ran_func_id = 144;
-const uint16_t SLICE_ran_func_id = 145;                   // Not implemented yet - placeholder for future RAN slicing functionality
-const uint16_t KPM_ran_func_id = 147;                     
-const char* cmd = "5_ms";                                 // TODO: change?
+const uint16_t SLICE_ran_func_id = 145; // Not implemented yet
+const uint16_t KPM_ran_func_id = 147;
+const char* cmd = "5_ms";
 
 
 static
@@ -70,13 +68,11 @@ int main(int argc, char *argv[])
   // Signal handler
   signal(SIGINT, sig_handler);
 
-  // Parse arguments
-  fr_args_t args = init_fr_args(argc, argv);            
+  fr_args_t args = init_fr_args(argc, argv);
  
   // Init the RIC
-  init_near_ric_api(&args);                   // relying on internal threads to handle E2 connections, RAN function communication, etc.
+  init_near_ric_api(&args);
 
-  // Idle loop - sleeps for 1 second
   while(1){
     poll(NULL, 0, 1000);
   }

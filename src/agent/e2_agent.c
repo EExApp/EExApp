@@ -53,7 +53,7 @@ ric_indication_t generate_aindication(e2_agent_t* ag, sm_ind_data_t* data, aind_
   ind.msg.len = data->len_msg;
   ind.msg.buf = data->ind_msg;
   if(data->call_process_id != NULL){
-    ind.call_process_id = malloc(sizeof(data->len_cpid) );
+    ind.call_process_id = malloc(sizeof(*ind.call_process_id));
     assert(ind.call_process_id != NULL && "Memory exhausted" );
     ind.call_process_id->buf = data->call_process_id;
     ind.call_process_id->len = data->len_cpid;
@@ -81,7 +81,7 @@ ric_indication_t generate_indication(e2_agent_t* ag, sm_ind_data_t* data, ind_ev
   ind.msg.len = data->len_msg;
   ind.msg.buf = data->ind_msg;
   if(data->call_process_id != NULL){
-    ind.call_process_id = malloc(sizeof(data->len_cpid) );
+    ind.call_process_id = malloc(sizeof(*ind.call_process_id) );
     assert(ind.call_process_id != NULL && "Memory exhausted" );
     ind.call_process_id->buf = data->call_process_id;
     ind.call_process_id->len = data->len_cpid;
@@ -378,7 +378,6 @@ void e2_event_loop_agent(e2_agent_t* ag)
           exp_ind_data_t exp = sm->proc.on_indication(sm, act_def); // , &e.i_ev->ric_id);
           // Condition not matched e.g., No UE matches condition 
           if(exp.has_value == false){
-            printf("[E2 AGENT]: Condition not matched e.g., No UE matches condition. Emulator triggers this condition for testing, but not the RAN \n");
             consume_fd_sync(e.fd);
             break;  
           }

@@ -19,7 +19,6 @@ set(COMPILER "GCC" CACHE STRING "Compiler")
 set_property(CACHE COMPILER PROPERTY STRINGS "GCC" "CLANG")
 
 if(COMPILER STREQUAL CLANG)
-  add_compile_options("-fblocks;")
   add_link_options("-lBlocksRuntime;")
 endif()
 

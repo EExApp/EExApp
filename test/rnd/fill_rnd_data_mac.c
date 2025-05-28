@@ -68,7 +68,7 @@ void fill_mac_ind_data(mac_ind_data_t* ind)
     ind_msg->ue_stats[i].ul_mcs1= abs(rand()%mod);
     ind_msg->ue_stats[i].dl_mcs2= abs(rand()%mod);
     ind_msg->ue_stats[i].ul_mcs2= abs(rand()%mod);
-    ind_msg->ue_stats[i].phr= (rand()%64) - 23; // 41 abs(rand()%mod);
+    ind_msg->ue_stats[i].phr = (rand() % 256) - 128;
     ind_msg->ue_stats[i].bsr= abs(rand()%mod);
     ind_msg->ue_stats[i].dl_num_harq = numUlHarq;
     for (uint8_t j = 0; j < numDLHarq; j++)

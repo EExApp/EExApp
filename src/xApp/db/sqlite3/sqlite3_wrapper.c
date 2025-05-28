@@ -74,7 +74,7 @@ void create_mac_ue_table(sqlite3* db)
                        "ul_mcs1  INT CHECK(ul_mcs1 >= 0 AND ul_mcs1 < 256),"
                        "dl_mcs2  INT CHECK(dl_mcs2 >= 0 AND dl_mcs2 < 256),"
                        "ul_mcs2 INT CHECK(ul_mcs2 >= 0 AND ul_mcs2 < 256),"
-                       "phr INT CHECK(phr > -24 AND  phr < 41)," // −23 dB to +40 dB
+                       "phr INT CHECK(phr >= -128 AND  phr < 128),"
                        "bsr INT CHECK(bsr >= 0 AND  bsr < 4294967296),"
                        "dl_bler REAL CHECK(dl_bler  >= 0 AND dl_bler < 4294967296),"
                        "ul_bler REAL CHECK(ul_bler  >= 0 AND ul_bler < 4294967296),"
@@ -157,7 +157,7 @@ void create_pdcp_bearer_table(sqlite3* db)
   // ToDo: PRIMARY KEY UNIQUE
   char* sql_pdcp = "DROP TABLE IF EXISTS PDCP_bearer;"
   "CREATE TABLE PDCP_bearer(tstamp INT CHECK(tstamp > 0)," 
-                       "ngran_node INT CHECK(ngran_node >= 0 AND ngran_node < 9),"
+                       "ngran_node INT CHECK(ngran_node >= 0 AND ngran_node <= 10),"
                        "mcc INT,"
                        "mnc INT,"
                        "mnc_digit_len INT,"
@@ -244,7 +244,7 @@ void create_gtp_table(sqlite3* db)
   // ToDo: PRIMARY KEY UNIQUE
   char* sql_gtp = "DROP TABLE IF EXISTS GTP_NGUT;"
   "CREATE TABLE GTP_NGUT(tstamp INT CHECK(tstamp > 0)," 
-                            "ngran_node INT CHECK(ngran_node >= 0 AND ngran_node < 9),"
+                            "ngran_node INT CHECK(ngran_node >= 0 AND ngran_node <= 10),"
                             "mcc INT,"
                             "mnc INT,"
                             "mnc_digit_len INT,"

@@ -1,3 +1,2 @@
 #!/bin/bash
-watch -ctn1 "cat rt_slice_stats.json | jq"
-
+watch -ctn1 "cat rt_slice_stats.json"

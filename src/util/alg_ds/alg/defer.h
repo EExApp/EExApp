@@ -38,24 +38,7 @@ SOFTWARE.
 #define FUNC_DEFER MACRO_CONCAT(FUNC_DEFER2, _counter ) 
 #define FUNC_DEFER_IMPL MACRO_CONCAT(FUNC_DEFER3, __impl ) 
 
-#if defined __clang__  // requires -fblocks (lambdas) and -lBlocksRuntime in the linker
-
-void cleanup_deferred (void (^*d) (void));
-
-#define defer(...)       \
-_Pragma("clang diagnostic push") \
-_Pragma("clang diagnostic ignored \"-Wincompatible-pointer-types-discards-qualifiers\" ") \
-__attribute__((__cleanup__ (cleanup_deferred))) \
-__attribute__((unused)) void (^FUNC_DEFER) (void) = ^__VA_ARGS__ \
-_Pragma("clang diagnostic pop") \
-
-/*
-//#define defer(...)\
-//__attribute__((__cleanup__ (cleanup_deferred)))\
-//void (^FUNC_DEFER) (void) = ^__VA_ARGS__
-*/
-
-#elif defined __GNUC__ // nested-function-in-stmt-expression
+#if defined __GNUC__ // nested-function-in-stmt-expression
 
 void cleanup_deferred (void (**d) (void));
 
