@@ -69,7 +69,7 @@ typedef enum {
     Min_PRB_Policy_Ratio_8_4_3_6 = 10,
     Max_PRB_Policy_Ratio_8_4_3_6 = 11,
     Dedicated_PRB_Policy_Ratio_8_4_3_6 = 12,
-    // Time scheduling parameters
+    // Time scheduling parameters (Jie)
     Normal_PRB_Allocation_Duration_8_4_3_6 = 13,  // a_t parameter
     Minimal_PRB_Allocation_Duration_8_4_3_6 = 14,  // b_t parameter
     Second_Normal_PRB_Allocation_Duration_8_4_3_6 = 15,  // c_t parameter
@@ -96,12 +96,12 @@ void gen_rrm_policy_ratio_group(lst_ran_param_t* RRM_Policy_Ratio_Group,
                                 int min_ratio_prb,
                                 int dedicated_ratio_prb,
                                 int max_ratio_prb,
-                                int a_t,
-                                int b_t,
-                                int c_t)
+                                int a_t,  // Jie
+                                int b_t,  
+                                int c_t)  
 {
   // RRM Policy Ratio Group, STRUCTURE (RRM Policy Ratio List -> RRM Policy Ratio Group)
-  RRM_Policy_Ratio_Group->ran_param_struct.sz_ran_param_struct = 7;  // Increased from 4 to 7 to include time parameters
+  RRM_Policy_Ratio_Group->ran_param_struct.sz_ran_param_struct = 7;  // Increased from 4 to 7 to include time parameters (Jie)
   RRM_Policy_Ratio_Group->ran_param_struct.ran_param_struct = calloc(7, sizeof(seq_ran_param_t));
   assert(RRM_Policy_Ratio_Group->ran_param_struct.ran_param_struct != NULL && "Memory exhausted");
 
@@ -200,7 +200,7 @@ void gen_rrm_policy_ratio_group(lst_ran_param_t* RRM_Policy_Ratio_Group,
   Dedicated_PRB_Policy_Ratio->ran_param_val.flag_false->type = INTEGER_RAN_PARAMETER_VALUE;
   Dedicated_PRB_Policy_Ratio->ran_param_val.flag_false->int_ran = dedicated_ratio_prb;
 
-  // Time scheduling parameters
+  // Time scheduling parameters (Jie)
   // a_t - Normal PRB allocation duration
   seq_ran_param_t* A_T_Param = &RRM_Policy_Ratio_Group->ran_param_struct.ran_param_struct[4];
   A_T_Param->ran_param_id = Normal_PRB_Allocation_Duration_8_4_3_6;
@@ -244,7 +244,7 @@ void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List)
   RRM_Policy_Ratio_List->ran_param_val.lst->lst_ran_param = calloc(num_slice, sizeof(lst_ran_param_t));
   assert(RRM_Policy_Ratio_List->ran_param_val.lst->lst_ran_param != NULL && "Memory exhausted");
 
-  // Read slic control parameters from file
+  // Read slic control parameters from file  (Jie)
   int numbers[7];
   FILE *file = fopen("../trandata/slice_ctrl.bin", "rb+");
   if (!file) {
@@ -268,7 +268,7 @@ void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List)
   int Max_PRB_Ratio[] = {80, 80, 80};
   int Min_PRB_Ratio[] = {20, 20, 20};
 
-  // Get time scheduling parameters from file
+  // Get time scheduling parameters from file (Jie)
   int a_t = numbers[3];  // Normal PRB allocation duration
   int b_t = numbers[4];  // Minimal PRB allocation duration
   int c_t = numbers[5];  // Second normal PRB allocation duration
@@ -281,7 +281,7 @@ void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List)
                              Min_PRB_Ratio[i],
                              dedicated_ratio_prb[i], 
                              Max_PRB_Ratio[i],
-                             a_t, b_t, c_t);  // Use time parameters from file
+                             a_t, b_t, c_t);  // Use time parameters from file (Jie)
   }   // filled RRM_Policy_Ratio_List (contains all the policy groups)
 
   return;
@@ -459,7 +459,7 @@ static
 void log_int_value(byte_array_t name, meas_record_lst_t meas_record)
 {
   fout_kpm = fopen(filename, mode);
-  byte_array_t test_name = cp_str_to_ba("RRU.PrbTotDl");
+  byte_array_t test_name = cp_str_to_ba("RRU.PrbTotDl");    // Jie
   if (eq_byte_array(&test_name, &name)) {
     //printf("RRU.PrbTotDl = %d [PRBs]\n", meas_record.int_val);
     fseek(fout_kpm, 0, SEEK_SET);
@@ -506,7 +506,7 @@ static
 void log_real_value(byte_array_t name, meas_record_lst_t meas_record)
 {
   fout_kpm = fopen(filename, mode);
-  byte_array_t test_name = cp_str_to_ba("DRB.RlcSduDelayDl");
+  byte_array_t test_name = cp_str_to_ba("DRB.RlcSduDelayDl");  // Jie
   if (eq_byte_array(&test_name, &name)) {
     //printf("DRB.RlcSduDelayDl = %.2f [μs]\n", meas_record.real_val);
     fseek(fout_kpm, 0, SEEK_SET);
@@ -942,7 +942,7 @@ int main(int argc, char *argv[])
     e2_node_connected_t* n = &nodes.n[i];
     //*********************************************MAC ENGIN *******************************
     for (size_t j = 0; j < n->len_rf; j++)
-      printf("Registered node %d ran func id = %d \n ", i, n->ack_rf[j].id);
+      printf("Registered node %d ran func id = %d \n ", i, n->ack_rf[j].id); // ack_rf (Jie)
       // n->ack_rf[j].id -> RAN functions that are acknowledged by the node
 
     if(n->id.type == ngran_gNB || n->id.type == ngran_eNB){
@@ -983,12 +983,12 @@ int main(int argc, char *argv[])
 
     //********************************************KPM BEGIN*********************************
 
-    size_t const idx = find_sm_idx(n->ack_rf, n->len_rf, eq_sm, KPM_ran_function);
+    size_t const idx = find_sm_idx(n->ack_rf, n->len_rf, eq_sm, KPM_ran_function);  // ack_rf (Jie)
     // if REPORT Service is supported by E2 node, send SUBSCRIPTION
     // e.g. OAI CU-CP
     //if (n->rf[idx].defn.kpm.ric_report_style_list != NULL) {
      // Generate KPM SUBSCRIPTION message
-    assert(n->ack_rf[idx].id == KPM_ran_function && "KPM is not the received RAN Function");
+    //assert(((kpm_ran_function_def_t*)&n->ack_rf[idx].defn)->type == KPM_RAN_FUNC_DEF_E && "KPM is not the received RAN Function"); // Jie
     
     // Generate KPM subscription data
     kpm_sub_data_t kpm_sub = gen_kpm_subs((kpm_ran_function_def_t*)&n->ack_rf[idx].defn);
