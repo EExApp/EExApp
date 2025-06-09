@@ -247,21 +247,21 @@ void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List)
 
   // Read slic control parameters from file  (Jie)
   int numbers[7];
-  FILE *file = fopen("../trandata/slice_ctrl.bin", "rb+");
+  FILE *file = fopen("/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl.bin", "rb+");
   if (!file) {
     perror("Unable to open slice_ctrl.bin file \n");
-    return;
+    return EXIT_FAILURE;
   }
   // read 7 integers from file as numbers[0] to numbers[6]
   if (fread(numbers, sizeof(int), 7, file) != 7) {
     perror("Failed to read integers from file");
     fclose(file);
-    return;
+    return EXIT_FAILURE;
   }
   fclose(file);
 
   // Configure slice parameters
-  const char* sst_str[] = {"1", "2", "3"};  // Slice/Service Type, eMBB, URLLC, mMTC
+  const char* sst_str[] = {"1", "1", "1"};  // Slice/Service Type, eMBB, URLLC, mMTC
   const char* sd_str[] = {"1", "5", "9"};   // Slice Differentiation, arbitrary
 
   // Get PRB ratios from control file
@@ -364,7 +364,7 @@ pthread_mutex_t mtx;
 
 //std::ofstream 
 FILE *fout_kpm;
-char filename[] = "../trandata/KPM_UE.txt";
+char filename[] = "/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/KPM_UE.txt";
 char mode[] = "a+";
 
 
@@ -1004,7 +1004,7 @@ int main(int argc, char *argv[])
     // Read control parameters from file
     int numbers[7];
     while(1) {
-      FILE *file = fopen("../trandata/slice_ctrl.bin", "rb+");
+      FILE *file = fopen("/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl.bin", "rb+");
       if (!file) {
         perror("Unable to open slice_ctrl.bin file \n");
         return EXIT_FAILURE;
