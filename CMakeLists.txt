@@ -140,7 +140,7 @@ set(XAPP_DB "SQLITE3_XAPP" CACHE STRING "xApp DB")
 set_property(CACHE XAPP_DB PROPERTY STRINGS "SQLITE3_XAPP" "NONE_XAPP")
 message(STATUS "Selected xApp DB : ${XAPP_DB}")
 
-set(XAPP_DB_DIR "/tmp/" CACHE STRING "The xApp DB write directory")
+set(XAPP_DB_DIR "/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/" CACHE STRING "The xApp DB write directory")
 if(NOT XAPP_DB_DIR  MATCHES "/$")
   message(FATAL_ERROR "xApp directory path needs to terminate in one / char")
 endif() 

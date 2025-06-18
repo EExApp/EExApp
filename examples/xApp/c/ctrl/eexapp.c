@@ -247,18 +247,31 @@ void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List)
 
   // Read slic control parameters from file  (Jie)
   int numbers[7];
-  FILE *file = fopen("/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl.bin", "rb+");
-  if (!file) {
-    perror("Unable to open slice_ctrl.bin file \n");
-    return EXIT_FAILURE;
+  while(1)
+  {
+      FILE *file = fopen("/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl.bin", "rb+");
+      if (!file) {
+          perror("Unable to open slice_ctrl.bin file \n");
+          return EXIT_FAILURE;
+      }
+      // read 7 integers from file as numbers[] 
+      if (fread(numbers, sizeof(int), 7, file) != 7) {
+          perror("Failed to read integers from file");
+          fclose(file);
+          return EXIT_FAILURE;
+      }
+
+      if(numbers[6] == 0){
+          fclose(file);
+          break;
+      }else{
+          fclose(file);
+          continue;
+          printf("control flag is not 0, no change made.\n");
+      }
+      fclose(file);
   }
-  // read 7 integers from file as numbers[0] to numbers[6]
-  if (fread(numbers, sizeof(int), 7, file) != 7) {
-    perror("Failed to read integers from file");
-    fclose(file);
-    return EXIT_FAILURE;
-  }
-  fclose(file);
+  
 
   // Configure slice parameters
   const char* sst_str[] = {"1", "1", "1"};  // Slice/Service Type, eMBB, URLLC, mMTC
@@ -386,13 +399,6 @@ static
 void log_gnb_ue_id(ue_id_e2sm_t ue_id)
 {
   i++;
-  //printf("###############the totle number of lines in the file%d", i);
-  /*if (i>2){
-    fout_kpm = fopen(filename, mode0);
-    i = 0;
-  }else{
-    fout_kpm = fopen(filename, mode);
-  }*/
   if (num_line < 5){
     fout_kpm = fopen(filename, mode);
     num_line ++;
@@ -407,10 +413,8 @@ void log_gnb_ue_id(ue_id_e2sm_t ue_id)
     }
   } else {
     //printf("UE ID type = gNB, amf_ue_ngap_id = %lu\n", ue_id.gnb.amf_ue_ngap_id);
-    //printf("111#####################\n");
   }
   if (ue_id.gnb.ran_ue_id != NULL) {
-    //printf("ran_ue_id = %lx", *ue_id.gnb.ran_ue_id); // RAN UE NGAP ID
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%ld ", *ue_id.gnb.ran_ue_id);
     fclose(fout_kpm);
@@ -421,9 +425,7 @@ static
 void log_du_ue_id(ue_id_e2sm_t ue_id)
 {
   fout_kpm = fopen(filename, mode0);
-  //printf("UE ID type = gNB-DU, gnb_cu_ue_f1ap = %u\n", ue_id.gnb_du.gnb_cu_ue_f1ap);
   if (ue_id.gnb_du.ran_ue_id != NULL) {
-    //printf("ran_ue_id = %lx\n", *ue_id.gnb_du.ran_ue_id); // RAN UE NGAP ID
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%ld ", *ue_id.gnb_du.ran_ue_id);
     fclose(fout_kpm);
@@ -434,9 +436,7 @@ static
 void log_cuup_ue_id(ue_id_e2sm_t ue_id)
 {
   fout_kpm = fopen(filename, mode0);
-  //printf("UE ID type = gNB-CU-UP, gnb_cu_cp_ue_e1ap = %u\n", ue_id.gnb_cu_up.gnb_cu_cp_ue_e1ap);
   if (ue_id.gnb_cu_up.ran_ue_id != NULL) {
-    //printf("ran_ue_id = %lx\n", *ue_id.gnb_cu_up.ran_ue_id); // RAN UE NGAP ID
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%ld ", *ue_id.gnb_cu_up.ran_ue_id);
     fclose(fout_kpm);
@@ -461,22 +461,18 @@ void log_int_value(byte_array_t name, meas_record_lst_t meas_record)
 {
   fout_kpm = fopen(filename, mode);
   if (cmp_str_ba("RRU.PrbTotDl", name) == 0) {
-    //printf("RRU.PrbTotDl = %d [PRBs]\n", meas_record.int_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%d ", meas_record.int_val);
     fclose(fout_kpm);
   } else if (cmp_str_ba("RRU.PrbTotUl", name) == 0) {
-    //printf("RRU.PrbTotUl = %d [PRBs]\n", meas_record.int_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%d\n", meas_record.int_val);
     fclose(fout_kpm);
   } else if (cmp_str_ba("DRB.PdcpSduVolumeDL", name) == 0) {
-    //printf("DRB.PdcpSduVolumeDL = %d [kb]\n", meas_record.int_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%d ", meas_record.int_val);
     fclose(fout_kpm);
   } else if (cmp_str_ba("DRB.PdcpSduVolumeUL", name) == 0) {
-    //printf("DRB.PdcpSduVolumeUL = %d [kb]\n", meas_record.int_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%d ", meas_record.int_val);
     fclose(fout_kpm);
@@ -490,17 +486,14 @@ void log_real_value(byte_array_t name, meas_record_lst_t meas_record)
 {
   fout_kpm = fopen(filename, mode);
   if (cmp_str_ba("DRB.RlcSduDelayDl", name) == 0) {
-    //printf("DRB.RlcSduDelayDl = %.2f [μs]\n", meas_record.real_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%.2f ", meas_record.real_val);
     fclose(fout_kpm);
   } else if (cmp_str_ba("DRB.UEThpDl", name) == 0) {
-    //printf("DRB.UEThpDl = %.2f [kbps]\n", meas_record.real_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%.2f ", meas_record.real_val);
     fclose(fout_kpm);
   } else if (cmp_str_ba("DRB.UEThpUl", name) == 0) {
-    //printf("DRB.UEThpUl = %.2f [kbps]\n", meas_record.real_val);
     fseek(fout_kpm, 0, SEEK_SET);
     fprintf(fout_kpm, "%.2f ", meas_record.real_val);
     fclose(fout_kpm);
@@ -545,22 +538,26 @@ static
 void log_kpm_measurements(kpm_ind_msg_format_1_t const* msg_frm_1)
 {
   assert(msg_frm_1->meas_info_lst_len > 0 && "Cannot correctly print measurements");
+  //printf("[DEBUG] KPM: Processing measurements, info list length: %zu\n", msg_frm_1->meas_info_lst_len);
 
   // UE Measurements per granularity period
   for (size_t j = 0; j < msg_frm_1->meas_data_lst_len; j++) {
     meas_data_lst_t const data_item = msg_frm_1->meas_data_lst[j];
+    //printf("[DEBUG] KPM: Processing data item %zu, record length: %zu\n", j, data_item.meas_record_len);
 
     for (size_t z = 0; z < data_item.meas_record_len; z++) {
       meas_type_t const meas_type = msg_frm_1->meas_info_lst[z].meas_type;
       meas_record_lst_t const record_item = data_item.meas_record_lst[z];
+      
+      //printf("[DEBUG] KPM: Measurement type: %s, value type: %d\n", 
+      //       meas_type.name.buf, record_item.value);
 
       match_meas_type[meas_type.type](meas_type, record_item);
 
       if (data_item.incomplete_flag && *data_item.incomplete_flag == TRUE_ENUM_VALUE)
-        printf("Measurement Record not reliable");
+        printf("[DEBUG] KPM: Measurement Record not reliable\n");
     }
   }
-
 }
 
 static
@@ -569,6 +566,8 @@ void sm_cb_kpm(sm_ag_if_rd_t const* rd)
   assert(rd != NULL);
   assert(rd->type == INDICATION_MSG_AGENT_IF_ANS_V0);
   assert(rd->ind.type == KPM_STATS_V3_0);
+
+  //printf("[DEBUG] KPM: Received KPM indication\n");
 
   // Reading Indication Message Format 3
   kpm_ind_data_t const* ind = &rd->ind.kpm.ind;
@@ -580,18 +579,26 @@ void sm_cb_kpm(sm_ag_if_rd_t const* rd)
   {
     lock_guard(&mtx);
 
-    //printf("\n%7d KPM ind_msg latency = %ld [μs]\n", counter, now - hdr_frm_1->collectStartTime); // xApp <-> E2 Node
+    //printf("[DEBUG] KPM: Indication %d, latency = %ld [μs]\n", 
+    //       counter, now - hdr_frm_1->collectStartTime);     //  xApp <-> E2 Node latency
 
     // Reported list of measurements per UE
+    //printf("[DEBUG] KPM: Number of UE measurements: %zu\n", 
+    //       msg_frm_3->ue_meas_report_lst_len);
+
     for (size_t i = 0; i < msg_frm_3->ue_meas_report_lst_len; i++) {
       // log UE ID
       ue_id_e2sm_t const ue_id_e2sm = msg_frm_3->meas_report_per_ue[i].ue_meas_report_lst;
       ue_id_e2sm_e const type = ue_id_e2sm.type;
+      
+      //if (ue_id_e2sm.gnb.ran_ue_id != NULL) {
+      //  printf("[DEBUG] KPM: Processing UE ID: %ld\n", *ue_id_e2sm.gnb.ran_ue_id);
+      //}
+
       log_ue_id_e2sm[type](ue_id_e2sm);
 
       // log measurements
       log_kpm_measurements(&msg_frm_3->meas_report_per_ue[i].ind_msg_format_1);
-      
     }
     counter++;
   }
@@ -1004,33 +1011,35 @@ int main(int argc, char *argv[])
     // Read control parameters from file
     int numbers[7];
     while(1) {
-      FILE *file = fopen("/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl.bin", "rb+");
-      if (!file) {
-        perror("Unable to open slice_ctrl.bin file \n");
-        return EXIT_FAILURE;
-      }
+        FILE *file = fopen("/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl.bin", "rb+");
+        if (!file) {
+            perror("Unable to open slice_ctrl.bin file \n");
+            return EXIT_FAILURE;
+        }
 
-      if (fread(numbers, sizeof(int), 7, file) != 7) {
-        perror("Failed to read integers from file");
-        fclose(file);
-        return EXIT_FAILURE;
-      }
+        if (fread(numbers, sizeof(int), 7, file) != 7) {
+            perror("Failed to read integers from file");
+            fclose(file);
+            return EXIT_FAILURE;
+        }
 
-      // if the last integer is 0, set it to 1 and write back to file
-      if (numbers[6] == 0) {                      // 0 - control needed, 1 - control applied
-        numbers[6] = 1;
-        fseek(file, -sizeof(int), SEEK_CUR);
-        if (fwrite(&numbers[6], sizeof(int), 1, file) != 1) {
-          perror("Failed to write integer to file");
-          fclose(file);
-          return EXIT_FAILURE;
+        // if the last integer is 0, set it to 1 and write back to file
+        if (numbers[6] == 0) {                      // 0 - control needed, 1 - control applied
+            numbers[6] = 1;
+            fseek(file, -sizeof(int), SEEK_CUR);
+            if (fwrite(&numbers[6], sizeof(int), 1, file) != 1) {
+                perror("Failed to write integer to file");
+                fclose(file);
+                return EXIT_FAILURE;
+            }
+            fclose(file);
+            break;
+        } else {
+            fclose(file);
+            continue;
+            printf("Third integer is not 0, no changes made.\n");
         }
         fclose(file);
-        break;
-      } else {
-        fclose(file);
-        continue;
-      }
     }
 
     // Clean up

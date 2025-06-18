@@ -1,0 +1,12 @@
+PPO training loop implementation for the Multi-Critic Multi-Actor architecture
+    
+    1. Observe network state
+    2. Encode state s_t using GRU
+    3. sample actions a_t = {a_t_1, a_t_2} using actors. collect the transitions (s_t, a_t, V_t, s_(t+1), r_t, logp_t) by running the current policy in the O-RAN environment
+    4. aggregate the critic values v_agg_t={v_agg_1_t, v_agg_2_t} from two critics to two actors using bipartite GAT 
+    5. compute advantage A_t of each actor based on v_agg_t, using GAE
+    6. compute the target return R_t of each critic based on advantage and value function 
+    7. optimize the clipped objective function for each actor, and update each actor
+    8. update each critic using Huber loss of the target return and the critic value
+    
+ 
