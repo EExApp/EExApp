@@ -1,2 +1,10 @@
 build/
+ci-scripts/
+docker/
+trandata/
+myenv/
+algorithms/models
+algorithms/ppo_training_results
+algorithms/__pycache__
 
+compile_commands.json

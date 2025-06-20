@@ -399,7 +399,7 @@ static
 void log_gnb_ue_id(ue_id_e2sm_t ue_id)
 {
   i++;
-  if (num_line < 5){
+  if (num_line < 12){
     fout_kpm = fopen(filename, mode);
     num_line ++;
   }else{

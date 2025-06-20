@@ -1033,11 +1033,18 @@ void write_mac_stats(sqlite3* db, global_e2_node_id_t const* id, mac_ind_data_t 
 
   mac_ind_msg_t const* ind_msg_mac = &ind->msg; 
 
-  char buffer[2048] = {0};
+  char buffer[8192] = {0};    //from 1024 to 8192, Jie
   int pos = 0;
 
   for(size_t i = 0; i < ind_msg_mac->len_ue_stats; ++i){
-    pos += to_sql_string_mac_ue(id, &ind_msg_mac->ue_stats[i], ind_msg_mac->tstamp, buffer + pos, 2048 - pos);
+    // Check if we have enough space for the next UE (need at least 1024 bytes) - Jie 
+    if (pos + 1024 >= 8192) {
+      // Buffer is getting full, insert current data and reset
+      insert_db(db, buffer);
+      memset(buffer, 0, sizeof(buffer));
+      pos = 0;
+    }
+    pos += to_sql_string_mac_ue(id, &ind_msg_mac->ue_stats[i], ind_msg_mac->tstamp, buffer + pos, 8192 - pos);
   }
 
   insert_db(db, buffer);
@@ -1051,11 +1058,18 @@ void write_rlc_stats(sqlite3* db, global_e2_node_id_t const* id, rlc_ind_data_t 
 
   rlc_ind_msg_t const* ind_msg_rlc = &ind->msg; 
 
-  char buffer[2048] = {0};
+  char buffer[8192] = {0};    //from 1024 to 8192, Jie
   int pos = 0;
 
   for(size_t i = 0; i < ind_msg_rlc->len; ++i){
-    pos += to_sql_string_rlc_rb(id, &ind_msg_rlc->rb[i], ind_msg_rlc->tstamp, buffer + pos, 2048 - pos);
+    // Check if we have enough space for the next RLC bearer (need at least 1024 bytes) - Jie
+    if (pos + 1024 >= 8192) {
+      // Buffer is getting full, insert current data and reset
+      insert_db(db, buffer);
+      memset(buffer, 0, sizeof(buffer));
+      pos = 0;
+    }
+    pos += to_sql_string_rlc_rb(id, &ind_msg_rlc->rb[i], ind_msg_rlc->tstamp, buffer + pos, 8192 - pos);
   }
 
   insert_db(db, buffer);
@@ -1070,11 +1084,18 @@ void write_pdcp_stats(sqlite3* db, global_e2_node_id_t const* id, pdcp_ind_data_
 
   pdcp_ind_msg_t const* ind_msg_pdcp = &ind->msg; 
 
-  char buffer[2048] = {0};
+  char buffer[8192] = {0};
   int pos = 0;
 
   for(size_t i = 0; i < ind_msg_pdcp->len; ++i){
-    pos += to_sql_string_pdcp_rb(id, &ind_msg_pdcp->rb[i], ind_msg_pdcp->tstamp, buffer + pos, 2048 - pos);
+    // Check if we have enough space for the next PDCP bearer (need at least 512 bytes) - Jie
+    if (pos + 512 >= 8192) {
+      // Buffer is getting full, insert current data and reset
+      insert_db(db, buffer);
+      memset(buffer, 0, sizeof(buffer));
+      pos = 0;
+    }
+    pos += to_sql_string_pdcp_rb(id, &ind_msg_pdcp->rb[i], ind_msg_pdcp->tstamp, buffer + pos, 8192 - pos);
   }
 
   insert_db(db, buffer);
@@ -1104,16 +1125,23 @@ void write_slice_conf_stats(sqlite3* db, global_e2_node_id_t const* id, int64_t 
 static
 void write_ue_slice_conf_stats(sqlite3* db, global_e2_node_id_t const* id, int64_t tstamp, ue_slice_conf_t const* ue_slice_conf)
 {
-  char buffer[4096] = {0};
+  char buffer[8192] = {0};
   int pos = 0;
 
   if (ue_slice_conf->len_ue_slice > 0) {
     for(uint32_t j = 0; j < ue_slice_conf->len_ue_slice; ++j) {
+      // Check if we have enough space for the next UE slice (need at least 512 bytes) - Jie
+      if (pos + 512 >= 8192) {
+        // Buffer is getting full, insert current data and reset
+        insert_db(db, buffer);
+        memset(buffer, 0, sizeof(buffer));
+        pos = 0;
+      }
       ue_slice_assoc_t *u = &ue_slice_conf->ues[j];
-      pos += to_sql_string_ue_slice_rb(id, ue_slice_conf, u, tstamp, buffer + pos, 2048 - pos);
+      pos += to_sql_string_ue_slice_rb(id, ue_slice_conf, u, tstamp, buffer + pos, 8192 - pos);
     }
   } else {
-    pos += to_sql_string_ue_slice_rb(id, ue_slice_conf, NULL, tstamp, buffer + pos, 2048 - pos);
+    pos += to_sql_string_ue_slice_rb(id, ue_slice_conf, NULL, tstamp, buffer + pos, 8192 - pos);
   }
 
   insert_db(db, buffer);
@@ -1140,10 +1168,17 @@ void write_gtp_stats(sqlite3* db, global_e2_node_id_t const* id, gtp_ind_data_t 
 
   gtp_ind_msg_t const* ind_msg_gtp = &ind->msg; 
 
-  char buffer[2048] = {0};
+  char buffer[8192] = {0};    //from 1024 to 8192, Jie
   int pos = 0;
   for(size_t i = 0; i < ind_msg_gtp->len; ++i){
-    pos += to_sql_string_gtp_NGUT(id, &ind_msg_gtp->ngut[i], ind_msg_gtp->tstamp, buffer + pos, 2048 - pos);
+    // Check if we have enough space for the next GTP entry (need at least 1024 bytes) - Jie
+    if (pos + 1024 >= 8192) {
+      // Buffer is getting full, insert current data and reset
+      insert_db(db, buffer);
+      memset(buffer, 0, sizeof(buffer));
+      pos = 0;
+    }
+    pos += to_sql_string_gtp_NGUT(id, &ind_msg_gtp->ngut[i], ind_msg_gtp->tstamp, buffer + pos, 8192 - pos);
   }
 
   insert_db(db, buffer);
