@@ -38,13 +38,13 @@ def train_sgrpo():
         per_slice_delay = {s: [] for s in range(config.ENV['num_slices'])}
         qos_violations = {s: 0 for s in range(config.ENV['num_slices'])}
 
-        # Initialize old_policy as the current policy at the start
+        # Initialize old_policy as the current policy at the start of epoch
         old_policy = copy.deepcopy(policy).to(device)
         old_policy.eval()
 
         last_state = env.get_all_state()  # Initial observation
 
-        for _ in range(steps_per_epoch):
+        for step in range(steps_per_epoch):
             ue_states = last_state  # Use last state as observation
             ue_states_torch = torch.tensor(ue_states, dtype=torch.float32, device=device).unsqueeze(0)  # [BATCH_SIZE, num_ues, num_features]
             ue_slice_ids = env.get_user_slice_ids().to(device)  # [num_ues]
@@ -53,7 +53,7 @@ def train_sgrpo():
             group_logps = []
             group_obs = []
 
-            # Sample G actions from the same observation
+            # Sample G actions from the same observation using old_policy
             for g in range(G):
                 with torch.no_grad():
                     slicing_action, sleep_action = old_policy.sample_actions(ue_states_torch, ue_slice_ids)
@@ -70,9 +70,11 @@ def train_sgrpo():
             # Compute group-normalized advantages for the G actions
             group_rewards_tensor = torch.tensor(group_rewards, dtype=torch.float32, device=device)
             mean, std, advantages = group_normalize(group_rewards_tensor)
+            
             # Prepare tensors for update
             slicing_logps_old = torch.stack([x[0] for x in group_logps])  # [G]
             sleep_logps_old = torch.stack([x[1] for x in group_logps])    # [G]
+            
             # For the same states and actions, compute log-probs under current policy
             slicing_logps_new = []
             sleep_logps_new = []
@@ -86,32 +88,56 @@ def train_sgrpo():
                 sleep_logps_new.append(sleep_logp_new)
             slicing_logps_new = torch.stack(slicing_logps_new)  # [G]
             sleep_logps_new = torch.stack(sleep_logps_new)      # [G]
+            
             # Joint log-probabilities
             joint_logp_new = slicing_logps_new + sleep_logps_new
             joint_logp_old = slicing_logps_old + sleep_logps_old
+            
             # Joint probability ratio
             joint_ratio = torch.exp(joint_logp_new - joint_logp_old)
             clip_low, clip_high = 1 - epsilon, 1 + epsilon
+            
             # Clipped surrogate objective (joint)
             joint_obj = torch.min(
                 joint_ratio * advantages,
                 torch.clamp(joint_ratio, clip_low, clip_high) * advantages
             )
+            
             # KL divergence (sum of both heads, as before)
             slicing_kl = kl_divergence(slicing_logps_old, slicing_logps_new).mean()
             sleep_kl = kl_divergence(sleep_logps_old, sleep_logps_new).mean()
             total_kl = slicing_kl + sleep_kl
+            
             # Final loss
             loss = -joint_obj.mean() + beta_kl * total_kl
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            # After optimizer step, update old_policy to the new policy
-            old_policy = copy.deepcopy(policy).to(device)
-            old_policy.eval()
+            
+            # Policy update (only if KL divergence is acceptable)
+            if total_kl < target_kl:
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                policy_updated = True
+            else:
+                policy_updated = False
+            
+            # Update old_policy periodically (every train_pi_iters steps or when KL is too high)
+            update_old_policy = (step + 1) % config.SGRPO['train_pi_iters'] == 0 or total_kl > target_kl * 2
+            if update_old_policy and policy_updated:
+                old_policy = copy.deepcopy(policy).to(device)
+                old_policy.eval()
+            
             # SGRPO-specific logging
-            print(f"[SGRPO] Epoch {epoch+1} | Step {_+1} | Loss: {loss.item():.4f} | KL: {total_kl.item():.4f} | Return: {np.mean(group_rewards):.2f} | GroupAdv mean: {mean.item():.4f} std: {std.item():.4f}")
-            # Training process metrics
+            update_status = "UPDATED" if policy_updated else "SKIPPED"
+            
+            # Calculate action diversity for debugging
+            slicing_actions_array = np.array([action[0] for action in group_actions])
+            sleep_actions_array = np.array([action[1] for action in group_actions])
+            slicing_std = np.std(slicing_actions_array, axis=0).mean()
+            sleep_std = np.std(sleep_actions_array, axis=0).mean()
+            
+            print(f"[SGRPO] Epoch {epoch+1} | Step {step+1} | Loss: {loss.item():.4f} | KL: {total_kl.item():.4f} | Return: {np.mean(group_rewards):.2f} | GroupAdv mean: {mean.item():.4f} std: {std.item():.4f} | Policy: {update_status} | Action_std: slice={slicing_std:.2f} sleep={sleep_std:.2f}")
+            
+            # Store metrics for this step (but don't visualize yet)
             training_metrics = {
                 'ep_ret': float(np.mean(group_rewards)),
                 'ep_len': int(G),
@@ -121,7 +147,11 @@ def train_sgrpo():
                 'clip_frac': float(((joint_ratio > clip_high) | (joint_ratio < clip_low)).float().mean().item()),
                 'group_adv_mean': float(mean.item()),
                 'group_adv_std': float(std.item()),
+                'policy_updated': policy_updated,
+                'action_diversity_slice': float(slicing_std),
+                'action_diversity_sleep': float(sleep_std),
             }
+            
             # Network performance metrics
             slice_names = ['embb', 'urllc', 'mmtc']
             network_metrics = {}
@@ -130,14 +160,20 @@ def train_sgrpo():
                     network_metrics[f'throughput_{slice_names[s]}'] = np.mean(per_slice_throughput[s])
                     network_metrics[f'delay_{slice_names[s]}'] = np.mean(per_slice_delay[s])
                     network_metrics[f'qos_violation_{slice_names[s]}'] = qos_violations[s] / max(1, len(per_slice_throughput[s]))
+            
+            # Store action metrics for this step (use the last action from the group)
             action_metrics = {
-                'slicing_actions': np.stack([np.array(a[0]).flatten() for a in group_actions]),
-                'sleep_actions': np.stack([np.array(a[1]).flatten() for a in group_actions]),
+                'slicing_actions': group_actions[-1][0],  # Use the last action from the group
+                'sleep_actions': group_actions[-1][1],    # Use the last action from the group
             }
+            
+            # Update metrics but don't generate plots yet
             visualizer.update_metrics(epoch, training_metrics, network_metrics, action_metrics)
-            visualizer.save_metrics()  # Save plot data after each step
-            visualizer.generate_all_plots(epoch)
-            visualizer.print_summary(epoch)
+
+        # Generate plots and save metrics at the end of the epoch
+        visualizer.save_metrics()
+        visualizer.generate_all_plots(epoch)
+        visualizer.print_summary(epoch)
 
         # Save comprehensive model checkpoint at the end of the epoch
         if (epoch + 1) % save_freq == 0:
@@ -167,7 +203,6 @@ def train_sgrpo():
             }, latest_model_path)
             print(f"Model checkpoint saved: {model_path}")
             print(f"Latest model saved: {latest_model_path}")
-            visualizer.generate_all_plots(epoch)
             epoch_metrics = {
                 'epoch': epoch + 1,
                 'timestamp': datetime.now().isoformat(),

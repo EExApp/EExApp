@@ -11,6 +11,8 @@ warnings.filterwarnings('ignore')
 def to_serializable(obj):
     if isinstance(obj, np.ndarray):
         return obj.tolist()
+    elif isinstance(obj, (np.integer, np.floating)):
+        return obj.item()  # Convert numpy scalars to Python scalars
     elif isinstance(obj, dict):
         return {k: to_serializable(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -91,72 +93,76 @@ class SGRPOVisualizer:
         """Calculate derived metrics like energy efficiency, constraint satisfaction, etc."""
         try:
             # Energy efficiency (based on sleep actions)
-            if 'sleep_actions' in action_metrics and action_metrics['sleep_actions']:
+            if 'sleep_actions' in action_metrics and action_metrics['sleep_actions'] is not None:
                 sleep_actions = np.array(action_metrics['sleep_actions'])
-                if sleep_actions.ndim == 2:
-                    sleep_actions = sleep_actions[-1]  # Use last action
-                sleep_ratio = sleep_actions[1] / 7.0  # b_t / total_slots
-                active_ratio = (sleep_actions[0] + sleep_actions[2]) / 7.0  # (a_t + c_t) / total_slots
-                energy_efficiency = 1.0 - sleep_ratio  # Higher is better
-                
-                self.metrics['energy_efficiency'].append(float(energy_efficiency))
-                self.metrics['sleep_ratio'].append(float(sleep_ratio))
-                self.metrics['active_ratio'].append(float(active_ratio))
+                if sleep_actions.size > 0:  # Check if array is not empty
+                    if sleep_actions.ndim == 2:
+                        sleep_actions = sleep_actions[-1]  # Use last action
+                    sleep_ratio = sleep_actions[1] / 7.0  # b_t / total_slots
+                    active_ratio = (sleep_actions[0] + sleep_actions[2]) / 7.0  # (a_t + c_t) / total_slots
+                    energy_efficiency = 1.0 - sleep_ratio  # Higher is better
+                    
+                    self.metrics['energy_efficiency'].append(float(energy_efficiency))
+                    self.metrics['sleep_ratio'].append(float(sleep_ratio))
+                    self.metrics['active_ratio'].append(float(active_ratio))
             
             # Constraint satisfaction
-            if 'slicing_actions' in action_metrics and action_metrics['slicing_actions']:
+            if 'slicing_actions' in action_metrics and action_metrics['slicing_actions'] is not None:
                 slicing_actions = np.array(action_metrics['slicing_actions'])
-                if slicing_actions.ndim == 2:
-                    slicing_actions = slicing_actions[-1]  # Use last action
-                slicing_sum = np.sum(slicing_actions)
-                slicing_constraint = 1.0 if np.isclose(slicing_sum, 100.0, atol=1.0) else 0.0
-                
-                if 'sleep_actions' in action_metrics and action_metrics['sleep_actions']:
-                    sleep_actions = np.array(action_metrics['sleep_actions'])
-                    if sleep_actions.ndim == 2:
-                        sleep_actions = sleep_actions[-1]
-                    sleep_sum = np.sum(sleep_actions)
-                    sleep_constraint = 1.0 if np.isclose(sleep_sum, 7.0, atol=0.1) else 0.0
+                if slicing_actions.size > 0:  # Check if array is not empty
+                    if slicing_actions.ndim == 2:
+                        slicing_actions = slicing_actions[-1]  # Use last action
+                    slicing_sum = np.sum(slicing_actions)
+                    slicing_constraint = 1.0 if np.isclose(slicing_sum, 100.0, atol=1.0) else 0.0
                     
-                    constraint_satisfaction = (slicing_constraint + sleep_constraint) / 2.0
-                    self.metrics['constraint_satisfaction'].append(float(constraint_satisfaction))
+                    if 'sleep_actions' in action_metrics and action_metrics['sleep_actions'] is not None:
+                        sleep_actions = np.array(action_metrics['sleep_actions'])
+                        if sleep_actions.size > 0:  # Check if array is not empty
+                            if sleep_actions.ndim == 2:
+                                sleep_actions = sleep_actions[-1]
+                            sleep_sum = np.sum(sleep_actions)
+                            sleep_constraint = 1.0 if np.isclose(sleep_sum, 7.0, atol=0.1) else 0.0
+                            
+                            constraint_satisfaction = (slicing_constraint + sleep_constraint) / 2.0
+                            self.metrics['constraint_satisfaction'].append(float(constraint_satisfaction))
             
             # Slice utilization and fairness
-            if 'slicing_actions' in action_metrics and action_metrics['slicing_actions']:
+            if 'slicing_actions' in action_metrics and action_metrics['slicing_actions'] is not None:
                 slicing_actions = np.array(action_metrics['slicing_actions'])
-                if slicing_actions.ndim == 2:
-                    slicing_actions = slicing_actions[-1]
-                
-                # Utilization (how much of the 100% is used)
-                utilization = np.sum(slicing_actions) / 100.0
-                self.metrics['slice_utilization'].append(float(utilization))
-                
-                # Fairness (Jain's fairness index)
-                if np.sum(slicing_actions) > 0:
-                    fairness = (np.sum(slicing_actions) ** 2) / (len(slicing_actions) * np.sum(slicing_actions ** 2))
-                    self.metrics['slice_fairness'].append(float(fairness))
-                else:
-                    self.metrics['slice_fairness'].append(0.0)
-                
-                # QoS satisfaction
-                qos_satisfaction = 0.0
-                if self.config:
-                    slice_names = ['embb', 'urllc', 'mmtc']
-                    for s in range(self.config.ENV['num_slices']):
-                        thp_key = f'throughput_{slice_names[s]}'
-                        delay_key = f'delay_{slice_names[s]}'
-                        if thp_key in network_metrics and delay_key in network_metrics:
-                            thp = network_metrics[thp_key]
-                            delay = network_metrics[delay_key]
-                            req_thp = self.config.ENV['qos_targets'][s]['throughput']
-                            req_delay = self.config.ENV['qos_targets'][s]['delay']
-                            
-                            thp_sat = 1.0 if thp >= req_thp else thp / req_thp
-                            delay_sat = 1.0 if delay <= req_delay else req_delay / delay
-                            qos_satisfaction += (thp_sat + delay_sat) / 2.0
+                if slicing_actions.size > 0:  # Check if array is not empty
+                    if slicing_actions.ndim == 2:
+                        slicing_actions = slicing_actions[-1]
                     
-                    qos_satisfaction /= self.config.ENV['num_slices']
-                    self.metrics['slice_qos_satisfaction'].append(float(qos_satisfaction))
+                    # Utilization (how much of the 100% is used)
+                    utilization = np.sum(slicing_actions) / 100.0
+                    self.metrics['slice_utilization'].append(float(utilization))
+                    
+                    # Fairness (Jain's fairness index)
+                    if np.sum(slicing_actions) > 0:
+                        fairness = (np.sum(slicing_actions) ** 2) / (len(slicing_actions) * np.sum(slicing_actions ** 2))
+                        self.metrics['slice_fairness'].append(float(fairness))
+                    else:
+                        self.metrics['slice_fairness'].append(0.0)
+                    
+                    # QoS satisfaction
+                    qos_satisfaction = 0.0
+                    if self.config:
+                        slice_names = ['embb', 'urllc', 'mmtc']
+                        for s in range(self.config.ENV['num_slices']):
+                            thp_key = f'throughput_{slice_names[s]}'
+                            delay_key = f'delay_{slice_names[s]}'
+                            if thp_key in network_metrics and delay_key in network_metrics:
+                                thp = network_metrics[thp_key]
+                                delay = network_metrics[delay_key]
+                                req_thp = self.config.ENV['qos_targets'][s]['throughput']
+                                req_delay = self.config.ENV['qos_targets'][s]['delay']
+                                
+                                thp_sat = 1.0 if thp >= req_thp else thp / req_thp
+                                delay_sat = 1.0 if delay <= req_delay else req_delay / delay
+                                qos_satisfaction += (thp_sat + delay_sat) / 2.0
+                        
+                        qos_satisfaction /= self.config.ENV['num_slices']
+                        self.metrics['slice_qos_satisfaction'].append(float(qos_satisfaction))
                     
         except Exception as e:
             print(f"Warning: Error calculating derived metrics for epoch {epoch}: {e}")
@@ -276,6 +282,12 @@ class SGRPOVisualizer:
     def plot_action_analysis(self, save=True, show=False):
         """Plot detailed action analysis."""
         if not self.metrics['slicing_actions'] or not self.metrics['sleep_actions']:
+            print("Warning: No action data available for plotting")
+            return
+        
+        # Check if we have enough data to plot
+        if len(self.metrics['epoch']) < 1:
+            print("Warning: Not enough epochs to plot action analysis")
             return
         
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
@@ -285,11 +297,19 @@ class SGRPOVisualizer:
         slicing_actions = np.array(self.metrics['slicing_actions'])
         sleep_actions = np.array(self.metrics['sleep_actions'])
         
+        # Ensure we have the right shape
+        if slicing_actions.ndim == 1:
+            # If it's 1D, reshape to [epochs, features]
+            slicing_actions = slicing_actions.reshape(1, -1)
+        if sleep_actions.ndim == 1:
+            # If it's 1D, reshape to [epochs, features]
+            sleep_actions = sleep_actions.reshape(1, -1)
+        
         # Slicing actions over time
         slice_names = ['eMBB', 'URLLC', 'mMTC']
         colors = ['blue', 'red', 'green']
         
-        for i in range(3):
+        for i in range(min(3, slicing_actions.shape[1])):
             if slicing_actions.ndim == 3:
                 data = slicing_actions[:, 0, i]  # [epochs, batch, slice]
             else:
@@ -304,7 +324,7 @@ class SGRPOVisualizer:
         
         # Sleep actions over time
         sleep_names = ['a_t (Active 1)', 'b_t (Sleep)', 'c_t (Active 2)']
-        for i in range(3):
+        for i in range(min(3, sleep_actions.shape[1])):
             if sleep_actions.ndim == 3:
                 data = sleep_actions[:, 0, i]
             else:
@@ -367,8 +387,14 @@ class SGRPOVisualizer:
         # Per-slice allocation over time
         if 'slicing_actions' in self.metrics and len(self.metrics['slicing_actions']) > 0:
             slicing_actions = np.array(self.metrics['slicing_actions'])  # [epochs, num_slices]
+            
+            # Handle 1D case
+            if slicing_actions.ndim == 1:
+                slicing_actions = slicing_actions.reshape(1, -1)
+            
             if slicing_actions.ndim == 3:
                 slicing_actions = slicing_actions[:, 0, :]  # [epochs, num_slices]
+            
             plt.figure(figsize=(10, 6))
             for i in range(slicing_actions.shape[1]):
                 plt.plot(slicing_actions[:, i], label=f'Slice {i}')

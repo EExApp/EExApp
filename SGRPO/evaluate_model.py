@@ -101,13 +101,13 @@ class SGRPOEvaluator:
                 
                 group_actions = []
                 for g in range(G):
-                    with torch.no_grad():
-                        slicing_action, sleep_action = self.policy.sample_actions(ue_states_torch, ue_slice_ids)
-                    slicing_action_np = slicing_action.detach().cpu().numpy()
-                    sleep_action_np = sleep_action.detach().cpu().numpy()
+                with torch.no_grad():
+                    slicing_action, sleep_action = self.policy.sample_actions(ue_states_torch, ue_slice_ids)
+                slicing_action_np = slicing_action.detach().cpu().numpy()
+                sleep_action_np = sleep_action.detach().cpu().numpy()
                     group_actions.append((slicing_action_np, sleep_action_np))
-                    episode_actions['slicing'].append(slicing_action_np)
-                    episode_actions['sleep'].append(sleep_action_np)
+                episode_actions['slicing'].append(slicing_action_np)
+                episode_actions['sleep'].append(sleep_action_np)
                 
                 last_state, group_rewards, done, info = self.env.step(group_actions)
                 episode_return += np.mean(group_rewards)
@@ -228,8 +228,8 @@ class SGRPOEvaluator:
             while not done:
                 group_actions = []
                 for g in range(G):
-                    slicing_action = np.random.dirichlet([1, 1, 1]) * 100
-                    sleep_action = np.random.multinomial(7, [1/3, 1/3, 1/3])
+                slicing_action = np.random.dirichlet([1, 1, 1]) * 100
+                sleep_action = np.random.multinomial(7, [1/3, 1/3, 1/3])
                     group_actions.append((slicing_action, sleep_action))
                 last_state, group_rewards, done, info = self.env.step(group_actions)
                 episode_return += np.mean(group_rewards)
@@ -257,8 +257,8 @@ class SGRPOEvaluator:
             while not done:
                 group_actions = []
                 for g in range(G):
-                    slicing_action = np.array([33.33, 33.33, 33.34])
-                    sleep_action = np.array([2, 3, 2])
+                slicing_action = np.array([33.33, 33.33, 33.34])
+                sleep_action = np.array([2, 3, 2])
                     group_actions.append((slicing_action, sleep_action))
                 last_state, group_rewards, done, info = self.env.step(group_actions)
                 episode_return += np.mean(group_rewards)
@@ -289,11 +289,11 @@ class SGRPOEvaluator:
                 total_ues = np.sum(slice_counts)
                 group_actions = []
                 for g in range(G):
-                    if total_ues > 0:
-                        slicing_action = (slice_counts / total_ues) * 100
-                    else:
-                        slicing_action = np.array([33.33, 33.33, 33.34])
-                    sleep_action = np.array([3, 1, 3])
+                if total_ues > 0:
+                    slicing_action = (slice_counts / total_ues) * 100
+                else:
+                    slicing_action = np.array([33.33, 33.33, 33.34])
+                sleep_action = np.array([3, 1, 3])
                     group_actions.append((slicing_action, sleep_action))
                 last_state, group_rewards, done, info = self.env.step(group_actions)
                 episode_return += np.mean(group_rewards)

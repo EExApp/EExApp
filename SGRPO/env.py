@@ -346,6 +346,7 @@ class OranEnv(gym.Env):
         Reset the environment by writing random valid actions to all group control files.
         Slicing actions sum to 100, sleep actions sum to 7. All files set to flag=1 (ready).
         Only call this once at the beginning of training.
+        Returns the initial state.
         """
 
         for g in range(group_size):
@@ -359,6 +360,9 @@ class OranEnv(gym.Env):
             file_name = f'../trandata/slice_ctrl_{g}.bin'
             with open(file_name, 'wb') as f:
                 f.write(struct.pack('iiiiiii', *(slicing_ints + sleep_ints + [flag])))
+        
+        # Return initial state
+        return self.get_all_state()
 
     def init_control_files(self, group_size=1):
         """
@@ -409,7 +413,7 @@ class OranEnv(gym.Env):
                 penalty_d += max(0, (d_tk - D_s) / D_s)
         reward = lambda_eta * eta_t - lambda_p * penalty_p - lambda_d * penalty_d
         return reward
-
+    
     def close(self):
         """Clean up resources"""
         # No database connections to close since we create/close per call
