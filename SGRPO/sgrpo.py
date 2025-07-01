@@ -1,0 +1,196 @@
+import torch
+import torch.optim as optim
+import numpy as np
+from config import config, BATCH_SIZE
+from model import SGRPOPolicy
+from utils import group_normalize, log_prob_ratio, kl_divergence
+from state_encoder import TransformerStateEncoder
+import os
+import copy
+from visualization import SGRPOVisualizer
+from env import OranEnv
+import json
+from datetime import datetime
+import struct
+
+def train_sgrpo():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    env = OranEnv()
+    policy = SGRPOPolicy().to(device)
+    optimizer = optim.Adam(policy.parameters(), lr=config.SGRPO['pi_lr'])
+    visualizer = SGRPOVisualizer(save_dir='sgrpo_training_plots', config=config)
+
+    steps_per_epoch = config.SGRPO['steps_per_epoch']
+    epochs = config.SGRPO['epochs']
+    epsilon = config.SGRPO['epsilon']
+    beta_kl = config.SGRPO['beta_kl']
+    target_kl = config.SGRPO['target_kl']
+    save_freq = config.SGRPO['save_freq']
+    G = config.SGRPO['group_size']  # Number of actions per group
+
+    for epoch in range(epochs):
+        obs_buf, action_buf, reward_buf, old_logp_buf, group_adv_buf = [], [], [], [], []
+        ue_state_buf = []
+        env_state = env.reset(group_size=G)
+        done = False
+        ep_ret, ep_len = 0, 0
+        per_slice_throughput = {s: [] for s in range(config.ENV['num_slices'])}
+        per_slice_delay = {s: [] for s in range(config.ENV['num_slices'])}
+        qos_violations = {s: 0 for s in range(config.ENV['num_slices'])}
+
+        # Initialize old_policy as the current policy at the start
+        old_policy = copy.deepcopy(policy).to(device)
+        old_policy.eval()
+
+        last_state = env.get_all_state()  # Initial observation
+
+        for _ in range(steps_per_epoch):
+            ue_states = last_state  # Use last state as observation
+            ue_states_torch = torch.tensor(ue_states, dtype=torch.float32, device=device).unsqueeze(0)  # [BATCH_SIZE, num_ues, num_features]
+            ue_slice_ids = env.get_user_slice_ids().to(device)  # [num_ues]
+
+            group_actions = []
+            group_logps = []
+            group_obs = []
+
+            # Sample G actions from the same observation
+            for g in range(G):
+                with torch.no_grad():
+                    slicing_action, sleep_action = old_policy.sample_actions(ue_states_torch, ue_slice_ids)
+                    slicing_action_np = slicing_action.detach().cpu().numpy()
+                    sleep_action_np = sleep_action.detach().cpu().numpy()
+                    slicing_logp_old, sleep_logp_old = old_policy.log_prob(ue_states_torch, slicing_action, sleep_action, ue_slice_ids)
+                group_actions.append((slicing_action_np, sleep_action_np))
+                group_logps.append((slicing_logp_old.detach(), sleep_logp_old.detach()))
+                group_obs.append(ue_states)
+
+            # Execute group actions and get rewards using env.step
+            last_state, group_rewards, _, _ = env.step(group_actions)
+
+            # Compute group-normalized advantages for the G actions
+            group_rewards_tensor = torch.tensor(group_rewards, dtype=torch.float32, device=device)
+            mean, std, advantages = group_normalize(group_rewards_tensor)
+            # Prepare tensors for update
+            slicing_logps_old = torch.stack([x[0] for x in group_logps])  # [G]
+            sleep_logps_old = torch.stack([x[1] for x in group_logps])    # [G]
+            # For the same states and actions, compute log-probs under current policy
+            slicing_logps_new = []
+            sleep_logps_new = []
+            for i in range(G):
+                ue_states = torch.tensor(group_obs[i], dtype=torch.float32, device=device).unsqueeze(0)
+                ue_slice_ids = env.get_user_slice_ids().to(device)
+                slicing_action = torch.tensor(group_actions[i][0], dtype=torch.float32, device=device)
+                sleep_action = torch.tensor(group_actions[i][1], dtype=torch.long, device=device)
+                slicing_logp_new, sleep_logp_new = policy.log_prob(ue_states, slicing_action, sleep_action, ue_slice_ids)
+                slicing_logps_new.append(slicing_logp_new)
+                sleep_logps_new.append(sleep_logp_new)
+            slicing_logps_new = torch.stack(slicing_logps_new)  # [G]
+            sleep_logps_new = torch.stack(sleep_logps_new)      # [G]
+            # Joint log-probabilities
+            joint_logp_new = slicing_logps_new + sleep_logps_new
+            joint_logp_old = slicing_logps_old + sleep_logps_old
+            # Joint probability ratio
+            joint_ratio = torch.exp(joint_logp_new - joint_logp_old)
+            clip_low, clip_high = 1 - epsilon, 1 + epsilon
+            # Clipped surrogate objective (joint)
+            joint_obj = torch.min(
+                joint_ratio * advantages,
+                torch.clamp(joint_ratio, clip_low, clip_high) * advantages
+            )
+            # KL divergence (sum of both heads, as before)
+            slicing_kl = kl_divergence(slicing_logps_old, slicing_logps_new).mean()
+            sleep_kl = kl_divergence(sleep_logps_old, sleep_logps_new).mean()
+            total_kl = slicing_kl + sleep_kl
+            # Final loss
+            loss = -joint_obj.mean() + beta_kl * total_kl
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            # After optimizer step, update old_policy to the new policy
+            old_policy = copy.deepcopy(policy).to(device)
+            old_policy.eval()
+            # SGRPO-specific logging
+            print(f"[SGRPO] Epoch {epoch+1} | Step {_+1} | Loss: {loss.item():.4f} | KL: {total_kl.item():.4f} | Return: {np.mean(group_rewards):.2f} | GroupAdv mean: {mean.item():.4f} std: {std.item():.4f}")
+            # Training process metrics
+            training_metrics = {
+                'ep_ret': float(np.mean(group_rewards)),
+                'ep_len': int(G),
+                'pi_loss': float(loss.item()),
+                'kl_div': float(total_kl.item()),
+                'entropy': float((slicing_logps_new.mean() + sleep_logps_new.mean()).item()),
+                'clip_frac': float(((joint_ratio > clip_high) | (joint_ratio < clip_low)).float().mean().item()),
+                'group_adv_mean': float(mean.item()),
+                'group_adv_std': float(std.item()),
+            }
+            # Network performance metrics
+            slice_names = ['embb', 'urllc', 'mmtc']
+            network_metrics = {}
+            for s in range(config.ENV['num_slices']):
+                if per_slice_throughput[s]:
+                    network_metrics[f'throughput_{slice_names[s]}'] = np.mean(per_slice_throughput[s])
+                    network_metrics[f'delay_{slice_names[s]}'] = np.mean(per_slice_delay[s])
+                    network_metrics[f'qos_violation_{slice_names[s]}'] = qos_violations[s] / max(1, len(per_slice_throughput[s]))
+            action_metrics = {
+                'slicing_actions': np.stack([np.array(a[0]).flatten() for a in group_actions]),
+                'sleep_actions': np.stack([np.array(a[1]).flatten() for a in group_actions]),
+            }
+            visualizer.update_metrics(epoch, training_metrics, network_metrics, action_metrics)
+            visualizer.save_metrics()  # Save plot data after each step
+            visualizer.generate_all_plots(epoch)
+            visualizer.print_summary(epoch)
+
+        # Save comprehensive model checkpoint at the end of the epoch
+        if (epoch + 1) % save_freq == 0:
+            model_path = os.path.join('sgrpo_training_plots', f'policy_epoch{epoch+1}.pt')
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': policy.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'training_metrics': training_metrics,
+                'network_metrics': network_metrics,
+                'config': config.__dict__,
+                'loss': loss.item(),
+                'kl_div': total_kl.item(),
+                'ep_ret': np.mean(group_rewards),
+            }, model_path)
+            latest_model_path = os.path.join('sgrpo_training_plots', 'latest_policy.pt')
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': policy.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'training_metrics': training_metrics,
+                'network_metrics': network_metrics,
+                'config': config.__dict__,
+                'loss': loss.item(),
+                'kl_div': total_kl.item(),
+                'ep_ret': np.mean(group_rewards),
+            }, latest_model_path)
+            print(f"Model checkpoint saved: {model_path}")
+            print(f"Latest model saved: {latest_model_path}")
+            visualizer.generate_all_plots(epoch)
+            epoch_metrics = {
+                'epoch': epoch + 1,
+                'timestamp': datetime.now().isoformat(),
+                'training_metrics': training_metrics,
+                'network_metrics': network_metrics,
+                'action_metrics': action_metrics,
+                'config': config.__dict__
+            }
+            epoch_metrics_path = os.path.join('sgrpo_training_plots', f'epoch_{epoch+1}_metrics.json')
+            with open(epoch_metrics_path, 'w') as f:
+                json.dump(epoch_metrics, f, indent=2)
+            print(f"Epoch metrics saved: {epoch_metrics_path}")
+        if (epoch + 1) % 10 == 0:
+            print(f"\n{'='*60}")
+            print(f"Detailed Progress - Epoch {epoch+1}")
+            print(f"{'='*60}")
+            print(f"Training Loss: {loss.item():.6f}")
+            print(f"KL Divergence: {total_kl.item():.6f}")
+            print(f"Episode Return: {np.mean(group_rewards):.4f}")
+            print(f"Group Advantage - Mean: {mean.item():.4f}, Std: {std.item():.4f}")
+            print(f"Energy Efficiency: {training_metrics.get('energy_efficiency', 'N/A')}")
+            print(f"Constraint Satisfaction: {training_metrics.get('constraint_satisfaction', 'N/A')}")
+            print(f"{'='*60}\n")
+
+if __name__ == '__main__':
+    train_sgrpo() 

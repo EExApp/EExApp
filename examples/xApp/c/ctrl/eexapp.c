@@ -18,6 +18,12 @@
 #include <signal.h>
 #include <pthread.h>
 
+// Function prototypes
+static ue_id_e2sm_t gen_rc_ue_id(ue_id_e2sm_e type);
+static e2sm_rc_ctrl_hdr_t gen_rc_ctrl_hdr(e2sm_rc_ctrl_hdr_e hdr_frmt, ue_id_e2sm_t ue_id, uint32_t ric_style_type, uint16_t ctrl_act_id);
+static e2sm_rc_ctrl_msg_frmt_1_t gen_rc_ctrl_msg_frmt_1_slice_level_PRB_quota_with_group(int* group_numbers);
+static e2sm_rc_ctrl_msg_t gen_rc_ctrl_msg_with_group(e2sm_rc_ctrl_msg_e msg_frmt, int* group_numbers);
+
 //******************************************SLICE Begin*************************************//
 typedef enum{
     DRX_parameter_configuration_7_6_3_1 = 1,
@@ -27,6 +33,80 @@ typedef enum{
     CQI_table_configuration_7_6_3_1 = 5,
     Slice_level_PRB_quotal_7_6_3_1 = 6,
 } rc_ctrl_service_style_2_act_id_e;
+
+// Group file processing functions 
+static int read_group_file(int group_id, int* numbers) { // Jie
+    char filename[256];
+    snprintf(filename, sizeof(filename), 
+             "/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl_%d.bin", 
+             group_id);
+    
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        printf("Failed to open group file %d\n", group_id);
+        return -1;
+    }
+    
+    int result = (fread(numbers, sizeof(int), 7, file) == 7) ? 0 : -1; // read 7 integers from file as numbers[], return 0 if success
+    fclose(file);
+    return result;
+}
+
+static int update_group_flag(int group_id, int new_flag_value) { // Jie
+    char filename[256];
+    snprintf(filename, sizeof(filename), 
+             "/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl_%d.bin", 
+             group_id);
+    
+    FILE *file = fopen(filename, "rb+");
+    if (!file) {
+        printf("Failed to open group file %d for flag update\n", group_id);
+        return -1;
+    }
+    
+    fseek(file, -sizeof(int), SEEK_END);
+    int result = (fwrite(&new_flag_value, sizeof(int), 1, file) == 1) ? 0 : -1;
+    fclose(file);
+    return result;
+}
+
+static void process_group_control_files(e2_node_arr_xapp_t* nodes) { // Jie
+    for (int group_id = 0; group_id < 6; group_id++) {
+        int numbers[7];
+        
+        // Read group file
+        if (read_group_file(group_id, numbers) != 0) {
+            printf("Failed to read group %d file\n", group_id);
+            continue;
+        }
+        
+        // Check if action needs to be applied (flag == 0)
+        if (numbers[6] != 0) {
+            continue; // Skip if already applied
+        }
+        
+        // Generate control message using existing logic with group parameters
+        rc_ctrl_req_data_t rc_ctrl = {0};
+        ue_id_e2sm_t ue_id = gen_rc_ue_id(GNB_UE_ID_E2SM);
+        
+        rc_ctrl.hdr = gen_rc_ctrl_hdr(FORMAT_1_E2SM_RC_CTRL_HDR, ue_id, 2, Slice_level_PRB_quotal_7_6_3_1);
+        rc_ctrl.msg = gen_rc_ctrl_msg_with_group(FORMAT_1_E2SM_RC_CTRL_MSG, numbers);
+        
+        // Send to all nodes (reuse existing code)
+        for(size_t i = 0; i < nodes->len; ++i) {
+            control_sm_xapp_api(&nodes->n[i].id, SM_RC_ID, &rc_ctrl);
+        }
+        
+        // Update flag to 1 (action applied)
+        update_group_flag(group_id, 1);
+        
+        // Clean up
+        free_rc_ctrl_req_data(&rc_ctrl);
+        
+        // Small delay between groups
+        usleep(1000);
+    }
+}
 
 static
 e2sm_rc_ctrl_hdr_frmt_1_t gen_rc_ctrl_hdr_frmt_1(ue_id_e2sm_t ue_id, uint32_t ric_style_type, uint16_t ctrl_act_id)
@@ -233,7 +313,7 @@ void gen_rrm_policy_ratio_group(lst_ran_param_t* RRM_Policy_Ratio_Group,
 }
 
 static
-void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List)
+void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List, int* group_numbers)
 {
   int num_slice = 3;    //peihao change the number of slices here
   // seq_ran_param_t* RRM_Policy_Ratio_List =  &dst.ran_param[0];
@@ -245,44 +325,22 @@ void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List)
   RRM_Policy_Ratio_List->ran_param_val.lst->lst_ran_param = calloc(num_slice, sizeof(lst_ran_param_t));
   assert(RRM_Policy_Ratio_List->ran_param_val.lst->lst_ran_param != NULL && "Memory exhausted");
 
-  // Read slic control parameters from file  (Jie)
+  // Use group_numbers parameter instead of reading from file
   int numbers[7];
-  while(1)
-  {
-      FILE *file = fopen("/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl.bin", "rb+");
-      if (!file) {
-          perror("Unable to open slice_ctrl.bin file \n");
-          return EXIT_FAILURE;
-      }
-      // read 7 integers from file as numbers[] 
-      if (fread(numbers, sizeof(int), 7, file) != 7) {
-          perror("Failed to read integers from file");
-          fclose(file);
-          return EXIT_FAILURE;
-      }
-
-      if(numbers[6] == 0){
-          fclose(file);
-          break;
-      }else{
-          fclose(file);
-          continue;
-          printf("control flag is not 0, no change made.\n");
-      }
-      fclose(file);
+  for (int i = 0; i < 7; i++) {
+    numbers[i] = group_numbers[i];
   }
-  
 
   // Configure slice parameters
   const char* sst_str[] = {"1", "1", "1"};  // Slice/Service Type, eMBB, URLLC, mMTC
   const char* sd_str[] = {"1", "5", "9"};   // Slice Differentiation, arbitrary
 
-  // Get PRB ratios from control file
-  int dedicated_ratio_prb[] = {numbers[0], numbers[1], numbers[2]};     // slice percentages from file
+  // Get PRB ratios from group_numbers parameter
+  int dedicated_ratio_prb[] = {numbers[0], numbers[1], numbers[2]};     // slice percentages from group_numbers
   int Max_PRB_Ratio[] = {80, 80, 80};
   int Min_PRB_Ratio[] = {20, 20, 20};
 
-  // Get time scheduling parameters from file (Jie)
+  // Get time scheduling parameters from group_numbers parameter (Jie)
   int a_t = numbers[3];  // Normal PRB allocation duration
   int b_t = numbers[4];  // Minimal PRB allocation duration
   int c_t = numbers[5];  // Second normal PRB allocation duration
@@ -295,7 +353,7 @@ void gen_rrm_policy_ratio_list(seq_ran_param_t* RRM_Policy_Ratio_List)
                              Min_PRB_Ratio[i],
                              dedicated_ratio_prb[i], 
                              Max_PRB_Ratio[i],
-                             a_t, b_t, c_t);  // Use time parameters from file (Jie)
+                             a_t, b_t, c_t);  // Use time parameters from group_numbers 
   }   // filled RRM_Policy_Ratio_List (contains all the policy groups)
 
   return;
@@ -325,7 +383,7 @@ e2sm_rc_ctrl_msg_frmt_1_t gen_rc_ctrl_msg_frmt_1_slice_level_PRB_quota()
   dst.sz_ran_param = 1;
   dst.ran_param = calloc(1, sizeof(seq_ran_param_t));
   assert(dst.ran_param != NULL && "Memory exhausted");
-  gen_rrm_policy_ratio_list(&dst.ran_param[0]);
+  gen_rrm_policy_ratio_list(&dst.ran_param[0], NULL);
 
   return dst;
 }
@@ -341,6 +399,37 @@ e2sm_rc_ctrl_msg_t gen_rc_ctrl_msg(e2sm_rc_ctrl_msg_e msg_frmt)
   } else {
     assert(0!=0 && "not implemented the fill func for this ctrl msg frmt");
   }
+
+  return dst;
+}
+
+// New function to generate control message with group parameters
+static
+e2sm_rc_ctrl_msg_t gen_rc_ctrl_msg_with_group(e2sm_rc_ctrl_msg_e msg_frmt, int* group_numbers)
+{
+  e2sm_rc_ctrl_msg_t dst = {0};
+
+  if (msg_frmt == FORMAT_1_E2SM_RC_CTRL_MSG) {
+    dst.format = msg_frmt;
+    dst.frmt_1 = gen_rc_ctrl_msg_frmt_1_slice_level_PRB_quota_with_group(group_numbers);
+  } else {
+    assert(0!=0 && "not implemented the fill func for this ctrl msg frmt");
+  }
+
+  return dst;
+}
+
+// New function to generate control message format 1 with group parameters
+static
+e2sm_rc_ctrl_msg_frmt_1_t gen_rc_ctrl_msg_frmt_1_slice_level_PRB_quota_with_group(int* group_numbers)
+{
+  e2sm_rc_ctrl_msg_frmt_1_t dst = {0};
+
+  // RRM Policy Ratio List, LIST
+  dst.sz_ran_param = 1;
+  dst.ran_param = calloc(1, sizeof(seq_ran_param_t));
+  assert(dst.ran_param != NULL && "Memory exhausted");
+  gen_rrm_policy_ratio_list(&dst.ran_param[0], group_numbers);
 
   return dst;
 }
@@ -994,57 +1083,9 @@ int main(int argc, char *argv[])
   // E2SM-RC Control Header Format 1
   // E2SM-RC Control Message Format 1
   while(1) {
-    // Initialize control request 
-    rc_ctrl_req_data_t rc_ctrl = {0};
-    ue_id_e2sm_t ue_id = gen_rc_ue_id(GNB_UE_ID_E2SM);
-
-    // Create control header and message
-    rc_ctrl.hdr = gen_rc_ctrl_hdr(FORMAT_1_E2SM_RC_CTRL_HDR, ue_id, 2, Slice_level_PRB_quotal_7_6_3_1);
-    rc_ctrl.msg = gen_rc_ctrl_msg(FORMAT_1_E2SM_RC_CTRL_MSG);
-
-    // Send control to all connected nodes
-    int64_t st = time_now_us();
-    for(size_t i = 0; i < nodes.len; ++i) {
-      control_sm_xapp_api(&nodes.n[i].id, SM_RC_ID, &rc_ctrl);
-    }
-
-    // Read control parameters from file
-    int numbers[7];
-    while(1) {
-        FILE *file = fopen("/home/crybabeblues/Projects/EExApp_project/EExApp_main/trandata/slice_ctrl.bin", "rb+");
-        if (!file) {
-            perror("Unable to open slice_ctrl.bin file \n");
-            return EXIT_FAILURE;
-        }
-
-        if (fread(numbers, sizeof(int), 7, file) != 7) {
-            perror("Failed to read integers from file");
-            fclose(file);
-            return EXIT_FAILURE;
-        }
-
-        // if the last integer is 0, set it to 1 and write back to file
-        if (numbers[6] == 0) {                      // 0 - control needed, 1 - control applied
-            numbers[6] = 1;
-            fseek(file, -sizeof(int), SEEK_CUR);
-            if (fwrite(&numbers[6], sizeof(int), 1, file) != 1) {
-                perror("Failed to write integer to file");
-                fclose(file);
-                return EXIT_FAILURE;
-            }
-            fclose(file);
-            break;
-        } else {
-            fclose(file);
-            continue;
-            printf("Third integer is not 0, no changes made.\n");
-        }
-        fclose(file);
-    }
-
-    // Clean up
-    free_rc_ctrl_req_data(&rc_ctrl);
-    usleep(1000);  // Sleep for 1ms to prevent busy waiting
+    // Process group control files (slice_ctrl_0.bin to slice_ctrl_5.bin)
+    process_group_control_files(&nodes);
+    usleep(10000);  // Sleep for 10ms before next cycle
   }
   ////////////
   // END RC

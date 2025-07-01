@@ -51,6 +51,12 @@ class Config:
         'dropout': 0.1,         # Dropout rate
     }
     
+    # Reward weights for combining decomposed rewards
+    REWARD = {
+        'w_ee': 0.6,                # Weight for energy efficiency reward
+        'w_ns': 0.4                 # Weight for QoS/network slicing reward
+    }
+    
     '''
     For epochs times:
 
@@ -69,18 +75,18 @@ class Config:
     
     # PPO configuration
     PPO = {
-        'steps_per_epoch': 50,    # Number of state-action-reward transitions per epoch
-        'epochs': 100,              # Number of total training cycles
+        'steps_per_epoch': 100,    # Number of state-action-reward transitions per epoch
+        'epochs': 100,              # Increased for longer training
         'gamma': 0.99,              # Discount factor
         'clip_ratio': 0.2,          # PPO clip ratio
         'pi_lr': 3e-4,              # Policy learning rate
-        'vf_lr': 3e-4,              # Value function learning rate
-        'train_pi_iters': 10,       # Number of policy updates per epoch
-        'train_v_iters': 10,        # Number of value function updates per epoch
-        'lam': 0.95,                # GAE-Lambda parameter
-        'max_ep_len': 500,          # Maximum episode length
-        'target_kl': 0.01,          # Target KL divergence
-        'save_freq': 20,            # Model save frequency (epochs)
+        'vf_lr': 1e-3,              # Value function learning rate (often slightly higher)
+        'train_pi_iters': 10,       # Policy updates per epoch
+        'train_v_iters': 10,        # Value function updates per epoch
+        'lam': 0.97,                # GAE-Lambda, closer to 1 for long horizons
+        'max_ep_len': 100,         # Maximum episode length
+        'target_kl': 0.015,         # Target KL divergence, slightly relaxed
+        'save_freq': 10,            # Model save frequency (epochs)
     }
     
     # Action space configuration
