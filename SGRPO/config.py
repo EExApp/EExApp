@@ -13,15 +13,16 @@ class Config:
         'max_ues': 10,    # Maximum number of UEs supported
         'control_file': '../trandata/slice_ctrl.bin',  # Path to control file
         'kpm_file': '../trandata/KPM_UE.txt',         # Path to KPM file
-        'lambda_p': 0.7,  # Throughput penalty weight in NS reward calculation
-        'lambda_d': 0.3,  # Delay penalty weight in NS reward calculation
-        'lambda_eta': 1.0, # Energy efficiency reward weight
-        'qos_targets': [  # QoS targets for each slice type
-            {'throughput': 100, 'delay': 10},  # eMBB: High throughput, moderate latency
-            {'throughput': 50, 'delay': 5},    # URLLC: Moderate throughput, low latency
-            {'throughput': 20, 'delay': 20}    # mMTC: Low throughput, high latency tolerance
-        ],
-        'max_eta': 1000.0,  # Normalization constant for energy efficiency
+        'lambda_p': 0.7,  # Much reduced throughput penalty weight
+        'lambda_d': 0.3,  # Much reduced delay penalty weight
+        'lambda_eta': 1.0, # Much increased energy efficiency reward weight
+        'lambda_sleep': 1.0, # Added for decoupled energy reward
+        'lambda_thp': 1.0,   # Added for decoupled energy reward
+        'qos_targets': [  # QoS targets - throughput: Mbps, delay: ms
+            {'throughput': 8e-3, 'delay': 1000},  # eMBB: High throughput, moderate latency
+            {'throughput': 18e-3, 'delay': 2000},    # URLLC: Moderate throughput, low latency
+            {'throughput': 80e-3, 'delay': 500}    # mMTC: Low throughput, high latency tolerance
+        ]
     }
     
     # State encoder configuration (Transformer)
@@ -44,17 +45,17 @@ class Config:
     
     # SGRPO training configuration
     SGRPO = {
-        'steps_per_epoch': 100,    # Number of state-action-reward transitions per epoch
+        'steps_per_epoch': 50,    # Number of state-action-reward transitions per epoch
         'epochs': 100,              # Number of epochs
         'gamma': 0.99,              # Discount factor (if needed for future extensions)
         'clip_ratio': 0.2,          # PPO/GRPO clip ratio
-        'pi_lr': 3e-4,              # Policy learning rate
-        'train_pi_iters': 10,       # Policy updates per epoch
+        'pi_lr': 1e-5,              # Reduced learning rate for stability
+        'train_pi_iters': 5,        # More frequent policy updates
         'max_ep_len': 100,         # Maximum episode length
-        'target_kl': 0.015,         # Target KL divergence
+        'target_kl': 1,           # Much higher target KL to allow more updates
         'save_freq': 10,            # Model save frequency (epochs)
-        'epsilon': 0.2,             # Clipping parameter for GRPO
-        'beta_kl': 0.01,            # KL penalty coefficient
+        'epsilon': 0.1,             # Clipping parameter for GRPO
+        'beta_kl': 0.1,          # Increased KL penalty coefficient for stability
         'group_size': 6,            # Number of actions to sample per group (G)
     }
     

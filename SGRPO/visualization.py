@@ -75,13 +75,11 @@ class SGRPOVisualizer:
                 if key in network_metrics and network_metrics[key] is not None:
                     self.metrics[key].append(network_metrics[key])
             
-            # Actions
-            if 'slicing_actions' in action_metrics and action_metrics['slicing_actions'] is not None:
-                for act in action_metrics['slicing_actions']:
-                    self.metrics['slicing_actions'].append(act.tolist() if isinstance(act, np.ndarray) else act)
-            if 'sleep_actions' in action_metrics and action_metrics['sleep_actions'] is not None:
-                for act in action_metrics['sleep_actions']:
-                    self.metrics['sleep_actions'].append(act.tolist() if isinstance(act, np.ndarray) else act)
+            # Actions (only store if provided)
+            if action_metrics and 'slicing_actions' in action_metrics and action_metrics['slicing_actions'] is not None:
+                self.metrics['slicing_actions'].append(action_metrics['slicing_actions'].tolist() if isinstance(action_metrics['slicing_actions'], np.ndarray) else action_metrics['slicing_actions'])
+            if action_metrics and 'sleep_actions' in action_metrics and action_metrics['sleep_actions'] is not None:
+                self.metrics['sleep_actions'].append(action_metrics['sleep_actions'].tolist() if isinstance(action_metrics['sleep_actions'], np.ndarray) else action_metrics['sleep_actions'])
                 
             # Calculate additional metrics
             self._calculate_derived_metrics(epoch, training_metrics, network_metrics, action_metrics)
@@ -174,38 +172,42 @@ class SGRPOVisualizer:
         
         # Row 1: Core Training Metrics
         if self.metrics['ep_ret']:
-            axes[0, 0].plot(self.metrics['epoch'], self.metrics['ep_ret'], 'b-', linewidth=2, label='Episode Return')
+            # Use step indices for step-level metrics
+            step_indices = list(range(len(self.metrics['ep_ret'])))
+            axes[0, 0].plot(step_indices, self.metrics['ep_ret'], 'b-', linewidth=2, label='Episode Return')
             axes[0, 0].set_title('Episode Returns')
-            axes[0, 0].set_xlabel('Epoch')
+            axes[0, 0].set_xlabel('Step')
             axes[0, 0].set_ylabel('Return')
             axes[0, 0].grid(True, alpha=0.3)
             axes[0, 0].legend()
         
         if self.metrics['pi_loss']:
-            axes[0, 1].plot(self.metrics['epoch'], self.metrics['pi_loss'], 'r-', linewidth=2, label='Policy Loss')
+            step_indices = list(range(len(self.metrics['pi_loss'])))
+            axes[0, 1].plot(step_indices, self.metrics['pi_loss'], 'r-', linewidth=2, label='Policy Loss')
             axes[0, 1].set_title('Policy Loss')
-            axes[0, 1].set_xlabel('Epoch')
+            axes[0, 1].set_xlabel('Step')
             axes[0, 1].set_ylabel('Loss')
             axes[0, 1].grid(True, alpha=0.3)
             axes[0, 1].legend()
         
         if self.metrics['kl_div']:
-            axes[0, 2].plot(self.metrics['epoch'], self.metrics['kl_div'], 'g-', linewidth=2, label='KL Divergence')
+            step_indices = list(range(len(self.metrics['kl_div'])))
+            axes[0, 2].plot(step_indices, self.metrics['kl_div'], 'g-', linewidth=2, label='KL Divergence')
             axes[0, 2].axhline(y=0.01, color='r', linestyle='--', alpha=0.7, label='Target KL')
             axes[0, 2].set_title('KL Divergence')
-            axes[0, 2].set_xlabel('Epoch')
+            axes[0, 2].set_xlabel('Step')
             axes[0, 2].set_ylabel('KL Divergence')
             axes[0, 2].grid(True, alpha=0.3)
             axes[0, 2].legend()
         
-        # Row 2: Network Performance
+        # Row 2: Network Performance (use epoch-level metrics if available)
         slice_names = ['embb', 'urllc', 'mmtc']
         colors = ['blue', 'red', 'green']
         
         # Throughput comparison
         for s, (name, color) in enumerate(zip(slice_names, colors)):
             thp_key = f'throughput_{name}'
-            if self.metrics[thp_key]:
+            if self.metrics[thp_key] and len(self.metrics[thp_key]) == len(self.metrics['epoch']):
                 axes[1, 0].plot(self.metrics['epoch'], self.metrics[thp_key], 
                                color=color, linewidth=2, label=f'{name.upper()}')
                 if self.config:
@@ -220,7 +222,7 @@ class SGRPOVisualizer:
         # Delay comparison
         for s, (name, color) in enumerate(zip(slice_names, colors)):
             delay_key = f'delay_{name}'
-            if self.metrics[delay_key]:
+            if self.metrics[delay_key] and len(self.metrics[delay_key]) == len(self.metrics['epoch']):
                 axes[1, 1].plot(self.metrics['epoch'], self.metrics[delay_key], 
                                color=color, linewidth=2, label=f'{name.upper()}')
                 if self.config:
@@ -235,7 +237,7 @@ class SGRPOVisualizer:
         # QoS violations
         for s, (name, color) in enumerate(zip(slice_names, colors)):
             qv_key = f'qos_violation_{name}'
-            if self.metrics[qv_key]:
+            if self.metrics[qv_key] and len(self.metrics[qv_key]) == len(self.metrics['epoch']):
                 axes[1, 2].plot(self.metrics['epoch'], self.metrics[qv_key], 
                                color=color, linewidth=2, label=f'{name.upper()}')
         axes[1, 2].set_title('QoS Violations')
@@ -244,8 +246,8 @@ class SGRPOVisualizer:
         axes[1, 2].grid(True, alpha=0.3)
         axes[1, 2].legend()
         
-        # Row 3: Energy Efficiency and Actions
-        if self.metrics['energy_efficiency']:
+        # Row 3: Energy Efficiency and Actions (use epoch-level metrics)
+        if self.metrics['energy_efficiency'] and len(self.metrics['energy_efficiency']) == len(self.metrics['epoch']):
             axes[2, 0].plot(self.metrics['epoch'], self.metrics['energy_efficiency'], 
                            'purple', linewidth=2, label='Energy Efficiency')
             axes[2, 0].set_title('Energy Efficiency')
@@ -254,7 +256,7 @@ class SGRPOVisualizer:
             axes[2, 0].grid(True, alpha=0.3)
             axes[2, 0].legend()
         
-        if self.metrics['constraint_satisfaction']:
+        if self.metrics['constraint_satisfaction'] and len(self.metrics['constraint_satisfaction']) == len(self.metrics['epoch']):
             axes[2, 1].plot(self.metrics['epoch'], self.metrics['constraint_satisfaction'], 
                            'orange', linewidth=2, label='Constraint Satisfaction')
             axes[2, 1].set_title('Constraint Satisfaction')
@@ -263,7 +265,7 @@ class SGRPOVisualizer:
             axes[2, 1].grid(True, alpha=0.3)
             axes[2, 1].legend()
         
-        if self.metrics['slice_fairness']:
+        if self.metrics['slice_fairness'] and len(self.metrics['slice_fairness']) == len(self.metrics['epoch']):
             axes[2, 2].plot(self.metrics['epoch'], self.metrics['slice_fairness'], 
                            'brown', linewidth=2, label='Slice Fairness')
             axes[2, 2].set_title('Slice Fairness (Jain\'s Index)')
@@ -290,12 +292,28 @@ class SGRPOVisualizer:
             print("Warning: Not enough epochs to plot action analysis")
             return
         
+        # Check if action data dimensions match epoch dimensions
+        num_epochs = len(self.metrics['epoch'])
+        num_slicing_actions = len(self.metrics['slicing_actions'])
+        num_sleep_actions = len(self.metrics['sleep_actions'])
+        
+        print(f"Debug: epochs={num_epochs}, slicing_actions={num_slicing_actions}, sleep_actions={num_sleep_actions}")
+        
+        # Use the minimum length to avoid dimension mismatch
+        plot_length = min(num_epochs, num_slicing_actions, num_sleep_actions)
+        if plot_length < 1:
+            print("Warning: Not enough matching data points to plot")
+            return
+        
+        # Create x-axis data (epochs) for plotting
+        x_data = self.metrics['epoch'][:plot_length]
+        
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
         fig.suptitle('SGRPO Action Analysis', fontsize=16)
         
         # Convert actions to numpy arrays
-        slicing_actions = np.array(self.metrics['slicing_actions'])
-        sleep_actions = np.array(self.metrics['sleep_actions'])
+        slicing_actions = np.array(self.metrics['slicing_actions'][:plot_length])
+        sleep_actions = np.array(self.metrics['sleep_actions'][:plot_length])
         
         # Ensure we have the right shape
         if slicing_actions.ndim == 1:
@@ -314,7 +332,7 @@ class SGRPOVisualizer:
                 data = slicing_actions[:, 0, i]  # [epochs, batch, slice]
             else:
                 data = slicing_actions[:, i]  # [epochs, slice]
-            axes[0, 0].plot(self.metrics['epoch'], data, 
+            axes[0, 0].plot(x_data, data, 
                            color=colors[i], linewidth=2, label=slice_names[i])
         axes[0, 0].set_title('Slicing Actions Over Time')
         axes[0, 0].set_xlabel('Epoch')
@@ -329,7 +347,7 @@ class SGRPOVisualizer:
                 data = sleep_actions[:, 0, i]
             else:
                 data = sleep_actions[:, i]
-            axes[0, 1].plot(self.metrics['epoch'], data, 
+            axes[0, 1].plot(x_data, data, 
                            color=colors[i], linewidth=2, label=sleep_names[i])
         axes[0, 1].set_title('Sleep Actions Over Time')
         axes[0, 1].set_xlabel('Epoch')
@@ -358,8 +376,11 @@ class SGRPOVisualizer:
         axes[1, 0].grid(True, alpha=0.3)
         
         # Constraint satisfaction over time
-        if self.metrics['constraint_satisfaction']:
-            axes[1, 1].plot(self.metrics['epoch'], self.metrics['constraint_satisfaction'], 
+        if (self.metrics['constraint_satisfaction'] and 
+            len(self.metrics['constraint_satisfaction']) >= plot_length and
+            len(self.metrics['constraint_satisfaction']) == len(self.metrics['epoch'])):
+            constraint_data = self.metrics['constraint_satisfaction'][:plot_length]
+            axes[1, 1].plot(x_data, constraint_data, 
                            'orange', linewidth=2)
             axes[1, 1].set_title('Constraint Satisfaction')
             axes[1, 1].set_xlabel('Epoch')
@@ -367,9 +388,14 @@ class SGRPOVisualizer:
             axes[1, 1].grid(True, alpha=0.3)
         
         # Energy efficiency vs performance trade-off
-        if self.metrics['energy_efficiency'] and self.metrics['ep_ret']:
-            axes[1, 2].scatter(self.metrics['energy_efficiency'], self.metrics['ep_ret'], 
-                              alpha=0.6, c=self.metrics['epoch'], cmap='viridis')
+        if (self.metrics['energy_efficiency'] and self.metrics['ep_ret'] and 
+            len(self.metrics['energy_efficiency']) >= plot_length and 
+            len(self.metrics['energy_efficiency']) == len(self.metrics['epoch']) and
+            len(self.metrics['ep_ret']) >= plot_length):
+            energy_data = self.metrics['energy_efficiency'][:plot_length]
+            return_data = self.metrics['ep_ret'][:plot_length]
+            axes[1, 2].scatter(energy_data, return_data, 
+                              alpha=0.6, c=x_data, cmap='viridis')
             axes[1, 2].set_title('Energy vs Performance Trade-off')
             axes[1, 2].set_xlabel('Energy Efficiency')
             axes[1, 2].set_ylabel('Episode Return')
@@ -385,7 +411,9 @@ class SGRPOVisualizer:
 
     def plot_sgrpo_metrics(self, save=True, show=False):
         # Per-slice allocation over time
-        if 'slicing_actions' in self.metrics and len(self.metrics['slicing_actions']) > 0:
+        if ('slicing_actions' in self.metrics and 
+            len(self.metrics['slicing_actions']) > 0 and
+            len(self.metrics['slicing_actions']) == len(self.metrics['epoch'])):
             slicing_actions = np.array(self.metrics['slicing_actions'])  # [epochs, num_slices]
             
             # Handle 1D case
@@ -397,7 +425,7 @@ class SGRPOVisualizer:
             
             plt.figure(figsize=(10, 6))
             for i in range(slicing_actions.shape[1]):
-                plt.plot(slicing_actions[:, i], label=f'Slice {i}')
+                plt.plot(self.metrics['epoch'], slicing_actions[:, i], label=f'Slice {i}')
             plt.title('Per-slice Resource Allocation Over Time')
             plt.xlabel('Epoch')
             plt.ylabel('Resource (%)')
@@ -408,7 +436,9 @@ class SGRPOVisualizer:
                 plt.show()
             plt.close()
         # Constraint satisfaction
-        if 'constraint_satisfaction' in self.metrics and len(self.metrics['constraint_satisfaction']) > 0:
+        if ('constraint_satisfaction' in self.metrics and 
+            len(self.metrics['constraint_satisfaction']) > 0 and
+            len(self.metrics['constraint_satisfaction']) == len(self.metrics['epoch'])):
             plt.figure(figsize=(8, 4))
             plt.plot(self.metrics['epoch'], self.metrics['constraint_satisfaction'], label='Constraint Satisfaction')
             plt.title('Constraint Satisfaction Over Time')
@@ -421,7 +451,10 @@ class SGRPOVisualizer:
                 plt.show()
             plt.close()
         # Group advantage distribution
-        if 'group_adv_mean' in self.metrics and 'group_adv_std' in self.metrics and len(self.metrics['group_adv_mean']) > 0:
+        if ('group_adv_mean' in self.metrics and 'group_adv_std' in self.metrics and 
+            len(self.metrics['group_adv_mean']) > 0 and len(self.metrics['group_adv_std']) > 0 and
+            len(self.metrics['group_adv_mean']) == len(self.metrics['epoch']) and
+            len(self.metrics['group_adv_std']) == len(self.metrics['epoch'])):
             plt.figure(figsize=(8, 4))
             plt.plot(self.metrics['epoch'], self.metrics['group_adv_mean'], label='GroupAdv Mean')
             plt.plot(self.metrics['epoch'], self.metrics['group_adv_std'], label='GroupAdv Std')
@@ -452,23 +485,31 @@ class SGRPOVisualizer:
         plt.figure(figsize=(12, 8))
         plt.subplot(2, 2, 1)
         if metrics['ep_ret']:
-            plt.plot(metrics['ep_ret'], label='Episode Return')
+            step_indices = list(range(len(metrics['ep_ret'])))
+            plt.plot(step_indices, metrics['ep_ret'], label='Episode Return')
         plt.title('Episode Return')
+        plt.xlabel('Step')
         plt.legend()
         plt.subplot(2, 2, 2)
         if metrics['pi_loss']:
-            plt.plot(metrics['pi_loss'], label='Policy Loss')
+            step_indices = list(range(len(metrics['pi_loss'])))
+            plt.plot(step_indices, metrics['pi_loss'], label='Policy Loss')
         plt.title('Policy Loss')
+        plt.xlabel('Step')
         plt.legend()
         plt.subplot(2, 2, 3)
         if metrics['kl_div']:
-            plt.plot(metrics['kl_div'], label='KL Divergence')
+            step_indices = list(range(len(metrics['kl_div'])))
+            plt.plot(step_indices, metrics['kl_div'], label='KL Divergence')
         plt.title('KL Divergence')
+        plt.xlabel('Step')
         plt.legend()
         plt.subplot(2, 2, 4)
         if metrics['entropy']:
-            plt.plot(metrics['entropy'], label='Policy Entropy')
+            step_indices = list(range(len(metrics['entropy'])))
+            plt.plot(step_indices, metrics['entropy'], label='Policy Entropy')
         plt.title('Policy Entropy')
+        plt.xlabel('Step')
         plt.legend()
         plt.tight_layout()
         if save:
@@ -479,8 +520,10 @@ class SGRPOVisualizer:
         # Clipping fraction
         if metrics['clip_frac']:
             plt.figure()
-            plt.plot(metrics['clip_frac'], label='Clipping Fraction')
+            step_indices = list(range(len(metrics['clip_frac'])))
+            plt.plot(step_indices, metrics['clip_frac'], label='Clipping Fraction')
             plt.title('Clipping Fraction')
+            plt.xlabel('Step')
             plt.legend()
             if save:
                 plt.savefig(f'{self.save_dir}/clip_fraction.png')
@@ -495,11 +538,12 @@ class SGRPOVisualizer:
         plt.figure(figsize=(10, 6))
         for s in range(config.ENV['num_slices']):
             thp = metrics.get(f'throughput_{slice_names[s]}', [])
-            if thp:
+            if thp and len(thp) == len(metrics['epoch']):
                 req = config.ENV['qos_targets'][s]['throughput']
-                plt.plot(thp, label=f'{slice_names[s]} throughput')
+                plt.plot(metrics['epoch'], thp, label=f'{slice_names[s]} throughput')
                 plt.axhline(req, linestyle='--', color=f'C{s}', label=f'{slice_names[s]} req')
         plt.title('Per-slice Throughput')
+        plt.xlabel('Epoch')
         plt.legend()
         if save:
             plt.savefig(f'{self.save_dir}/per_slice_throughput.png')
@@ -510,11 +554,12 @@ class SGRPOVisualizer:
         plt.figure(figsize=(10, 6))
         for s in range(config.ENV['num_slices']):
             delay = metrics.get(f'delay_{slice_names[s]}', [])
-            if delay:
+            if delay and len(delay) == len(metrics['epoch']):
                 req = config.ENV['qos_targets'][s]['delay']
-                plt.plot(delay, label=f'{slice_names[s]} delay')
+                plt.plot(metrics['epoch'], delay, label=f'{slice_names[s]} delay')
                 plt.axhline(req, linestyle='--', color=f'C{s}', label=f'{slice_names[s]} req')
         plt.title('Per-slice Delay')
+        plt.xlabel('Epoch')
         plt.legend()
         if save:
             plt.savefig(f'{self.save_dir}/per_slice_delay.png')
@@ -525,9 +570,10 @@ class SGRPOVisualizer:
         plt.figure(figsize=(10, 6))
         for s in range(config.ENV['num_slices']):
             qv = metrics.get(f'qos_violation_{slice_names[s]}', [])
-            if qv:
-                plt.plot(qv, label=f'{slice_names[s]} QoS violation')
+            if qv and len(qv) == len(metrics['epoch']):
+                plt.plot(metrics['epoch'], qv, label=f'{slice_names[s]} QoS violation')
         plt.title('Per-slice QoS Violation')
+        plt.xlabel('Epoch')
         plt.legend()
         if save:
             plt.savefig(f'{self.save_dir}/per_slice_qos_violation.png')
@@ -542,7 +588,7 @@ class SGRPOVisualizer:
         data_to_save = {
             'metadata': {
                 'timestamp': datetime.now().isoformat(),
-                'total_epochs': len(self.metrics['epoch']),
+                'total_epochs': len(set(self.metrics['epoch'])) if self.metrics['epoch'] else 0,  # Count unique epochs
                 'config': self.config.__dict__ if self.config else None
             },
             'metrics': {}
@@ -568,7 +614,7 @@ class SGRPOVisualizer:
             f.write("=" * 60 + "\n\n")
             
             f.write(f"Training completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Total epochs: {len(self.metrics['epoch'])}\n\n")
+            f.write(f"Total epochs: {len(set(self.metrics['epoch'])) if self.metrics['epoch'] else 0}\n\n")  # Count unique epochs
             
             # Final metrics
             if self.metrics['ep_ret']:

@@ -2,32 +2,29 @@
 SGRPO Training Summary Report
 ============================================================
 
-Training completed at: 2025-06-30 02:13:12
-Total epochs: 1
+Training completed at: 2025-07-04 11:00:48
+Total epochs: 2
 
-Final Episode Return: 22.9332
-Average Episode Return: 22.9332
-Best Episode Return: 22.9332
+Final Episode Return: -0.2293
+Average Episode Return: -0.1722
+Best Episode Return: -0.1150
 
-Final Policy Loss: 0.156280
-Average Policy Loss: 0.156280
+Final Policy Loss: 72.109802
+Average Policy Loss: 36.617941
 
-Final KL Divergence: 15.627964
-Average KL Divergence: 15.627964
+Final KL Divergence: 718.407288
+Average KL Divergence: 363.794672
 
 Network Performance Summary:
 ------------------------------
-EMBB - Avg Throughput: 153963.20 kbps
-EMBB - Avg Delay: 0.00 ms
-EMBB - Avg QoS Violation: 0.0000
 
-URLLC - Avg Throughput: 102155.20 kbps
-URLLC - Avg Delay: 0.00 ms
-URLLC - Avg QoS Violation: 0.0000
 
-MMTC - Avg Throughput: 87879.20 kbps
-MMTC - Avg Delay: 0.00 ms
-MMTC - Avg QoS Violation: 0.0000
+
+Average Energy Efficiency: 0.7143
+Final Energy Efficiency: 0.8571
+
+Average Constraint Satisfaction: 1.0000
+Final Constraint Satisfaction: 1.0000
 
 ============================================================
 End of Report

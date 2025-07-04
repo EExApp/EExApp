@@ -10,8 +10,26 @@ def group_normalize(rewards):
         mean, std, normalized_advantages: all tensors
     """
     rewards = torch.as_tensor(rewards, dtype=torch.float32)
+    
+    # Clip extreme rewards to prevent numerical instability
+    rewards = torch.clamp(rewards, min=-100.0, max=100.0)
+    
     mean = rewards.mean()
-    std = rewards.std(unbiased=False) + 1e-8
+    std = rewards.std(unbiased=False)
+    
+    # Handle zero variance case to prevent NaN advantages
+    if std < 1e-8:
+        # Add small noise to break symmetry and enable learning
+        noise_std = 0.1 * torch.abs(mean) if torch.abs(mean) > 1e-8 else 0.1
+        noise = torch.randn_like(rewards) * noise_std
+        rewards = rewards + noise
+        mean = rewards.mean()
+        std = rewards.std(unbiased=False) + 1e-8
+        print(f"Warning: Zero variance detected, added noise (std={noise_std:.6f})")
+    
+    # Ensure minimum std to prevent division by very small numbers
+    std = torch.clamp(std, min=1e-6)
+    
     advantages = (rewards - mean) / std
     return mean, std, advantages
 
