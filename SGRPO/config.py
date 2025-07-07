@@ -17,7 +17,7 @@ class Config:
         'lambda_d': 0.3,  # Much reduced delay penalty weight
         'lambda_eta': 1.0, # Much increased energy efficiency reward weight
         'lambda_sleep': 1.0, # Added for decoupled energy reward
-        'lambda_thp': 1.0,   # Added for decoupled energy reward
+        'lambda_thp': 10.0,   # Added for decoupled energy reward
         'qos_targets': [  # QoS targets - throughput: Mbps, delay: ms
             {'throughput': 8e-3, 'delay': 1000},  # eMBB: High throughput, moderate latency
             {'throughput': 18e-3, 'delay': 2000},    # URLLC: Moderate throughput, low latency
@@ -41,14 +41,15 @@ class Config:
         'sleep_action_dim': 3,       # Sleep actions (a_t, b_t, c_t)
         'hidden_sizes': [64, 64],    # Hidden layer sizes for MLPs
         'transformer': True,         # Use transformer encoder
+        'temperature': 1.05          # Temperature for sleep action sampling (controls exploration-exploitation)
     }
     
     # SGRPO training configuration
     SGRPO = {
-        'steps_per_epoch': 50,    # Number of state-action-reward transitions per epoch
+        'steps_per_epoch': 10,    # Number of state-action-reward transitions per epoch
         'epochs': 100,              # Number of epochs
         'gamma': 0.99,              # Discount factor (if needed for future extensions)
-        'clip_ratio': 0.2,          # PPO/GRPO clip ratio
+        'clip_ratio': 0.1,          # PPO/GRPO clip ratio
         'pi_lr': 1e-5,              # Reduced learning rate for stability
         'train_pi_iters': 5,        # More frequent policy updates
         'max_ep_len': 100,         # Maximum episode length
@@ -56,15 +57,16 @@ class Config:
         'save_freq': 10,            # Model save frequency (epochs)
         'epsilon': 0.1,             # Clipping parameter for GRPO
         'beta_kl': 0.1,          # Increased KL penalty coefficient for stability
-        'group_size': 6,            # Number of actions to sample per group (G)
+        'group_size': 8,            # Number of actions to sample per group (G)
     }
     
     # Action space configuration
     ACTION_SPACE = {
         'sleep': {
             'min': 0,           # Minimum value for sleep actions
-            'max': 7,           # Maximum value for sleep actions
+            'max': 7,           # Maximum value for sleep actions (except b_t < 5)
             'sum': 7,           # Sum constraint for sleep actions
+            'b_t_max': 4,       # Maximum value for b_t (sleep duration) - must be < 5
         },
         'slicing': {
             'min': 20,          # Minimum percentage for network slicing

@@ -289,6 +289,7 @@ class OranEnv(gym.Env):
         Write a group of actions to separate files (slice_ctrl_{g}.bin) in ../trandata/.
         Each action is a tuple: (slicing_action, sleep_action), both arrays/lists of 3 values.
         Only write if the file's flag is 1 (ready), and set flag to the provided value (control needed or ready).
+        Enforces b_t < 5 constraint for sleep actions.
         """
         for g, (slicing_action, sleep_action) in enumerate(group_actions):
             file_name = f'../trandata/slice_ctrl_{g}.bin'
@@ -300,11 +301,23 @@ class OranEnv(gym.Env):
             if total_slice != 100:
                 slicing_ints = [int(round(x * 100 / total_slice)) for x in slicing_ints]
                 slicing_ints[2] = 100 - slicing_ints[0] - slicing_ints[1]
-            # Ensure sleep sum to 7
+            # Ensure sleep sum to 7 and b_t < 5 constraint
             total_sleep = sum(sleep_ints)
             if total_sleep != 7:
                 sleep_ints = [int(round(x * 7 / total_sleep)) for x in sleep_ints]
                 sleep_ints[2] = 7 - sleep_ints[0] - sleep_ints[1]
+            
+            # Enforce b_t < 5 constraint
+            if sleep_ints[1] >= 5:  # b_t is at index 1
+                print(f"Warning: b_t = {sleep_ints[1]} >= 5, enforcing constraint by setting b_t = 4")
+                sleep_ints[1] = 4  # Force b_t = 4
+                remaining = 7 - sleep_ints[0] - 4
+                if remaining > 0:
+                    sleep_ints[2] = remaining
+                else:
+                    sleep_ints[0] = max(0, sleep_ints[0] + remaining)
+                    sleep_ints[2] = 0
+            
             while True:
                 try:
                     with open(file_name, 'rb+') as file:
@@ -390,7 +403,7 @@ class OranEnv(gym.Env):
         """
         Calculate reward based on decoupled energy reward and penalties:
         r_t = energy_reward - throughput_penalty - delay_penalty
-        energy_reward = lambda_sleep * (T_sleep / T_max) + lambda_thp * (sum_k UEThpDL_k / K)
+        energy_reward = lambda_sleep * T_sleep  + lambda_thp * (sum_k UEThpDL_k / K)
         """
         # Get lambdas from config
         lambda_sleep = self.config.ENV.get('lambda_sleep', 1.0)
@@ -450,7 +463,8 @@ class OranEnv(gym.Env):
     def reset(self, group_size=1):
         """
         Reset the environment by writing random valid actions to all group control files.
-        Slicing actions sum to 100, sleep actions sum to 7. All files set to flag=1 (ready).
+        Slicing actions sum to 100, sleep actions sum to 7 with b_t < 5 constraint.
+        All files set to flag=1 (ready).
         Only call this once at the beginning of training.
         Returns the initial state.
         """
@@ -459,9 +473,29 @@ class OranEnv(gym.Env):
             slicing = np.random.dirichlet(np.ones(3)) * 100
             slicing_ints = [int(round(x)) for x in slicing]
             slicing_ints[2] = 100 - slicing_ints[0] - slicing_ints[1]
-            sleep = np.random.dirichlet(np.ones(3)) * 7
-            sleep_ints = [int(round(x)) for x in sleep]
-            sleep_ints[2] = 7 - sleep_ints[0] - sleep_ints[1]
+            
+            # Generate sleep actions with b_t < 5 constraint
+            max_attempts = 100
+            for attempt in range(max_attempts):
+                sleep = np.random.dirichlet(np.ones(3)) * 7
+                sleep_ints = [int(round(x)) for x in sleep]
+                sleep_ints[2] = 7 - sleep_ints[0] - sleep_ints[1]
+                
+                # Check if b_t < 5 constraint is satisfied
+                if sleep_ints[1] < 5:  # b_t is at index 1
+                    break
+                
+                # If constraint not satisfied and this is the last attempt, force b_t = 4
+                if attempt == max_attempts - 1:
+                    sleep_ints[1] = 4  # Force b_t = 4
+                    remaining = 7 - sleep_ints[0] - 4
+                    if remaining > 0:
+                        sleep_ints[2] = remaining
+                    else:
+                        sleep_ints[0] = max(0, sleep_ints[0] + remaining)
+                        sleep_ints[2] = 0
+                    print(f"Warning: Could not satisfy b_t < 5 constraint in reset, forcing b_t = 4")
+            
             flag = 1
             file_name = f'../trandata/slice_ctrl_{g}.bin'
             with open(file_name, 'wb') as f:

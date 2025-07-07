@@ -489,7 +489,7 @@ void log_gnb_ue_id(ue_id_e2sm_t ue_id)
 {
   i++;
   // 12 lines in total
-  /*
+  
   if (num_line < 12){
     fout_kpm = fopen(filename, mode);
     num_line ++;
@@ -497,10 +497,10 @@ void log_gnb_ue_id(ue_id_e2sm_t ue_id)
     fout_kpm = fopen(filename, mode0);
     num_line = 0;
   } 
-  */
+  /*
   // Always use append mode to log all UE IDs 
   fout_kpm = fopen(filename, mode); 
-  
+  */
   if (ue_id.gnb.gnb_cu_ue_f1ap_lst != NULL) {
     for (size_t i = 0; i < ue_id.gnb.gnb_cu_ue_f1ap_lst_len; i++) {
       //printf("UE ID type = gNB-CU, gnb_cu_ue_f1ap = %u\n", ue_id.gnb.gnb_cu_ue_f1ap_lst[i]);

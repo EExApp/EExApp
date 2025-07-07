@@ -98,7 +98,7 @@ class SGRPOVisualizer:
                         sleep_actions = sleep_actions[-1]  # Use last action
                     sleep_ratio = sleep_actions[1] / 7.0  # b_t / total_slots
                     active_ratio = (sleep_actions[0] + sleep_actions[2]) / 7.0  # (a_t + c_t) / total_slots
-                    energy_efficiency = 1.0 - sleep_ratio  # Higher is better
+                    energy_efficiency = sleep_ratio  # Higher is better
                     
                     self.metrics['energy_efficiency'].append(float(energy_efficiency))
                     self.metrics['sleep_ratio'].append(float(sleep_ratio))
@@ -249,10 +249,10 @@ class SGRPOVisualizer:
         # Row 3: Energy Efficiency and Actions (use epoch-level metrics)
         if self.metrics['energy_efficiency'] and len(self.metrics['energy_efficiency']) == len(self.metrics['epoch']):
             axes[2, 0].plot(self.metrics['epoch'], self.metrics['energy_efficiency'], 
-                           'purple', linewidth=2, label='Energy Efficiency')
-            axes[2, 0].set_title('Energy Efficiency')
+                           'purple', linewidth=2, label='Sleep Ratio')
+            axes[2, 0].set_title('Sleep Ratio')
             axes[2, 0].set_xlabel('Epoch')
-            axes[2, 0].set_ylabel('Efficiency')
+            axes[2, 0].set_ylabel('Sleep Ratio')
             axes[2, 0].grid(True, alpha=0.3)
             axes[2, 0].legend()
         

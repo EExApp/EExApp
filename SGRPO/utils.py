@@ -1,18 +1,19 @@
 import torch
 import numpy as np
 
-def group_normalize(rewards):
+def group_normalize(rewards, clip_threshold=5.0):
     """
     Compute group mean and std for rewards, return normalized advantages.
     Args:
         rewards: [num_ues] tensor or np.array
+        clip_threshold: maximum absolute value for advantages
     Returns:
         mean, std, normalized_advantages: all tensors
     """
     rewards = torch.as_tensor(rewards, dtype=torch.float32)
     
     # Clip extreme rewards to prevent numerical instability
-    rewards = torch.clamp(rewards, min=-100.0, max=100.0)
+    rewards = torch.clamp(rewards, min=-10.0, max=10.0)
     
     mean = rewards.mean()
     std = rewards.std(unbiased=False)
@@ -20,7 +21,7 @@ def group_normalize(rewards):
     # Handle zero variance case to prevent NaN advantages
     if std < 1e-8:
         # Add small noise to break symmetry and enable learning
-        noise_std = 0.1 * torch.abs(mean) if torch.abs(mean) > 1e-8 else 0.1
+        noise_std = 0.01 * torch.abs(mean) if torch.abs(mean) > 1e-8 else 0.01
         noise = torch.randn_like(rewards) * noise_std
         rewards = rewards + noise
         mean = rewards.mean()
@@ -31,6 +32,10 @@ def group_normalize(rewards):
     std = torch.clamp(std, min=1e-6)
     
     advantages = (rewards - mean) / std
+    
+    # Clip advantages to prevent extreme values
+    advantages = torch.clamp(advantages, min=-clip_threshold, max=clip_threshold)
+    
     return mean, std, advantages
 
 def log_prob_ratio(new_logp, old_logp):

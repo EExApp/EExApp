@@ -104,15 +104,39 @@ class SGRPOPolicy(nn.Module):
         slicing_dist = torch.distributions.Normal(slicing_means, slicing_std)
         slicing_action = slicing_dist.rsample()  # [num_slices]
         slicing_action = project_to_simplex(slicing_action, s=100.0)  # sum=100
-        # Sleep head: categorical distribution for 3 discrete actions (sum=7)
-        temperature = 1.2
+        
+        # Sleep head: categorical distribution for 3 discrete actions (sum=7) with b_t < 5 constraint
+        temperature = config.POLICY['temperature']
         sleep_logits_scaled = sleep_logits / temperature
         sleep_probs = F.softmax(sleep_logits_scaled, dim=-1)
-        # Sample 7 slots according to categorical distribution
-        sleep_action = torch.multinomial(sleep_probs, 7, replacement=True)
-        # Count occurrences for each slot type
-        sleep_counts = torch.bincount(sleep_action, minlength=3)
-        sleep_action = sleep_counts  # [a_t, b_t, c_t], sum=7
+        
+        # Rejection sampling to ensure b_t < 5
+        max_attempts = 100  # Prevent infinite loops
+        for attempt in range(max_attempts):
+            # Sample 7 slots according to categorical distribution
+            sleep_action = torch.multinomial(sleep_probs, 7, replacement=True)
+            # Count occurrences for each slot type
+            sleep_counts = torch.bincount(sleep_action, minlength=3)
+            sleep_action = sleep_counts  # [a_t, b_t, c_t], sum=7
+            
+            # Check if b_t < 5 constraint is satisfied
+            if sleep_action[1] < 5:  # b_t is at index 1
+                break
+            # If constraint not satisfied, try again
+            if attempt == max_attempts - 1:
+                # If we can't satisfy the constraint after max attempts, 
+                # force b_t to be 4 (maximum allowed value < 5)
+                sleep_action = torch.tensor([sleep_action[0], 4, sleep_action[2]], dtype=torch.long, device=sleep_action.device)
+                # Adjust the remaining slots to maintain sum=7
+                remaining = 7 - sleep_action[0] - 4
+                if remaining > 0:
+                    sleep_action[2] = remaining
+                else:
+                    # If remaining is negative, reduce a_t
+                    sleep_action[0] = max(0, sleep_action[0] + remaining)
+                    sleep_action[2] = 0
+                print(f"Warning: Could not satisfy b_t < 5 constraint after {max_attempts} attempts, forcing b_t = 4")
+        
         return slicing_action, sleep_action
 
     def log_prob(self, ue_states, slicing_action, sleep_action, ue_slice_ids=None, qos_targets=None):
@@ -120,8 +144,8 @@ class SGRPOPolicy(nn.Module):
         slicing_std = torch.exp(slicing_logstd)
         slicing_dist = torch.distributions.Normal(slicing_means, slicing_std)
         slicing_logp = slicing_dist.log_prob(slicing_action).sum()
-        # Sleep: categorical log-prob
-        temperature = 1.2
+        # Sleep: categorical log-prob (with b_t < 5 constraint)
+        temperature = config.POLICY['temperature']
         sleep_logits_scaled = sleep_logits / temperature
         sleep_probs = F.softmax(sleep_logits_scaled, dim=-1)
         sleep_dist = torch.distributions.Categorical(probs=sleep_probs)

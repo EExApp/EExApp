@@ -1,0 +1,19 @@
+{
+  "epoch": 10,
+  "timestamp": "2025-07-06T20:03:06.850001",
+  "training_metrics": {
+    "ep_ret": 3.4328888888888884,
+    "ep_len": 6,
+    "pi_loss": 7.0694804191589355,
+    "kl_div": 69.0519790649414,
+    "entropy": -4048.033935546875,
+    "clip_frac": 0.8333333134651184,
+    "group_adv_mean": 3.4328887462615967,
+    "group_adv_std": 0.873953104019165,
+    "policy_updated": false,
+    "action_diversity_slice": 0.582428514957428,
+    "action_diversity_sleep": 0.6152576875545285
+  },
+  "network_metrics": {},
+  "action_metrics": {
+    "slicing_actions": 
