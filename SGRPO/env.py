@@ -360,7 +360,9 @@ class OranEnv(gym.Env):
             file_name = f'../trandata/slice_ctrl_{g}.bin'
             
             # Wait for this specific action to be processed (flag check)
-            while True:
+            max_wait_time = self.config.SGRPO.get('max_wait_time', 5.0)  # Maximum wait time in seconds
+            start_time = time.time()
+            while time.time() - start_time < max_wait_time:
                 try:
                     with open(file_name, 'rb') as file:
                         data = file.read(28)
@@ -370,10 +372,12 @@ class OranEnv(gym.Env):
                         if numbers[6] == 1:  # Action has been processed
                             break
                         else:
-                            time.sleep(0.1)  # Wait a bit before checking again
+                            time.sleep(0.05)  # Wait a bit before checking again
                 except FileNotFoundError:
-                    time.sleep(0.1)
+                    time.sleep(0.05)
                     continue
+            else:
+                print(f"Warning: Timeout waiting for action {g} to be processed")
             
             # Now read the current environment state after this action was applied
             current_state = self.get_all_state()
@@ -417,8 +421,9 @@ class OranEnv(gym.Env):
         K = len(current_throughput)
         # Energy reward (decoupled)
         sleep_term = lambda_sleep * T_sleep
-        throughput_term = lambda_thp * (sum(current_throughput) / K if K > 0 else 0.0)
-        energy_reward = sleep_term + throughput_term
+        #throughput_term = lambda_thp * (sum(current_throughput) / K if K > 0 else 0.0)
+        #energy_reward = sleep_term + throughput_term
+        energy_reward = sleep_term
         # Throughput penalty (QoS violations, only if DRB_pdcpSduVolumeDL > 0)
         penalty_p = 0.0
         for s_idx, slice_name in enumerate(['embb', 'urllc', 'mmtc']):

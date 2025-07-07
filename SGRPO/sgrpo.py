@@ -112,6 +112,12 @@ def train_sgrpo():
                         group_rewards_tensor = torch.tensor(group_rewards, dtype=torch.float32, device=device)
                         mean, std, advantages = group_normalize(group_rewards_tensor)
                         
+                        # Additional advantage normalization for stability (added)
+                        if std > 0:
+                            advantages = advantages / (std + 1e-8)  # Normalize to unit variance
+                        else:
+                            advantages = advantages - mean  # Just center if no variance
+                        
                         # Prepare tensors for update
                         slicing_logps_old = torch.stack([x[0] for x in group_logps])  # [G]
                         sleep_logps_old = torch.stack([x[1] for x in group_logps])    # [G]
@@ -149,8 +155,10 @@ def train_sgrpo():
                         sleep_kl = kl_divergence(sleep_logps_old, sleep_logps_new).mean()
                         total_kl = slicing_kl + sleep_kl
                         
-                        # Final loss
-                        loss = -joint_obj.mean() + beta_kl * total_kl
+                        # Final loss with additional regularization for stability (added)
+                        entropy_coef = config.SGRPO.get('entropy_coef', 0.01)
+                        entropy_bonus = entropy_coef * (slicing_logps_new.mean() + sleep_logps_new.mean())  # Encourage exploration
+                        loss = -joint_obj.mean() + beta_kl * total_kl - entropy_bonus
                         
                         # Policy update (only if KL divergence is acceptable)
                         if total_kl < target_kl:
@@ -160,6 +168,11 @@ def train_sgrpo():
                             torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=0.5)
                             optimizer.step()
                             policy_updated = True
+                            
+                            # Adaptive learning rate based on KL divergence (added)
+                            if total_kl > target_kl * 0.5:  # If KL is getting close to limit
+                                for param_group in optimizer.param_groups:
+                                    param_group['lr'] = max(param_group['lr'] * 0.95, config.SGRPO['pi_lr'] * 0.1)
                         elif total_kl < target_kl * 2.5:  # Allow updates with moderate KL
                             # Use smaller learning rate for high KL updates
                             for param_group in optimizer.param_groups:
@@ -191,6 +204,11 @@ def train_sgrpo():
                         else:
                             policy_updated = False
                             print(f"Warning: Extremely high KL (KL={total_kl:.4f}), skipping update")
+                            
+                            # Early stopping if KL is consistently too high (added)
+                            if step > 10 and total_kl > target_kl * 10:
+                                print(f"Early stopping due to consistently high KL divergence")
+                                break
                         
                         # SGRPO-specific logging
                         update_status = "UPDATED" if policy_updated else "SKIPPED"

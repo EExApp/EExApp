@@ -16,7 +16,7 @@ class Config:
         'lambda_p': 0.7,  # Much reduced throughput penalty weight
         'lambda_d': 0.3,  # Much reduced delay penalty weight
         'lambda_eta': 1.0, # Much increased energy efficiency reward weight
-        'lambda_sleep': 1.0, # Added for decoupled energy reward
+        'lambda_sleep': 10.0, # Added for decoupled energy reward
         'lambda_thp': 10.0,   # Added for decoupled energy reward
         'qos_targets': [  # QoS targets - throughput: Mbps, delay: ms
             {'throughput': 8e-3, 'delay': 1000},  # eMBB: High throughput, moderate latency
@@ -55,9 +55,12 @@ class Config:
         'max_ep_len': 100,         # Maximum episode length
         'target_kl': 1,           # Much higher target KL to allow more updates
         'save_freq': 10,            # Model save frequency (epochs)
-        'epsilon': 0.1,             # Clipping parameter for GRPO
-        'beta_kl': 0.1,          # Increased KL penalty coefficient for stability
-        'group_size': 8,            # Number of actions to sample per group (G)
+        'epsilon': 0.05,            # Reduced clipping parameter for more conservative updates
+        'beta_kl': 0.2,             # Increased KL penalty coefficient for stability
+        'group_size': 6,            # Number of actions to sample per group (G)
+        'max_grad_norm': 0.5,       # Gradient clipping norm
+        'entropy_coef': 0.01,       # Entropy regularization coefficient
+        'max_wait_time': 5.0,       # Maximum wait time for environment (seconds)
     }
     
     # Action space configuration
