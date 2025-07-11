@@ -25,8 +25,9 @@ class SGRPOPolicy(nn.Module):
     Slicing head: 3 continuous actions (sum=100, Gaussian)
     Sleep head: 3 discrete actions (sum=7, categorical)
     """
-    def __init__(self):
+    def __init__(self, device=None):
         super().__init__()
+        self.device = device if device is not None else torch.device('cpu')
         self.encoder = TransformerStateEncoder()
         self.hidden_dim = config.STATE_ENCODER['hidden_dim']
         self.num_slices = config.ENV['num_slices']
@@ -35,23 +36,23 @@ class SGRPOPolicy(nn.Module):
         self.qos_dim = 2  # throughput, delay per slice
 
         # Learnable queries for attention pooling per slice
-        self.slice_queries = nn.Parameter(torch.randn(self.num_slices, self.hidden_dim))
-        self.slice_attn = nn.MultiheadAttention(self.hidden_dim, config.STATE_ENCODER['num_heads'], batch_first=True)
+        self.slice_queries = nn.Parameter(torch.randn(self.num_slices, self.hidden_dim, device=self.device))
+        self.slice_attn = nn.MultiheadAttention(self.hidden_dim, config.STATE_ENCODER['num_heads'], batch_first=True, device=self.device)
 
         # Slicing head: MLP after attention pooling + QoS targets
         # Input dimension: hidden_dim + qos_dim (64 + 2 = 66)
         self.slicing_head_mean = nn.Sequential(
-            nn.Linear(self.hidden_dim + self.qos_dim, self.hidden_dim),
+            nn.Linear(self.hidden_dim + self.qos_dim, self.hidden_dim, device=self.device),
             nn.ReLU(),
-            nn.Linear(self.hidden_dim, 1)
+            nn.Linear(self.hidden_dim, 1, device=self.device)
         )
-        self.slicing_head_logstd = nn.Parameter(torch.zeros(self.num_slices))
+        self.slicing_head_logstd = nn.Parameter(torch.zeros(self.num_slices, device=self.device))
 
         # Sleep control head: global pooling + MLP with categorical output
         self.sleep_head = nn.Sequential(
-            nn.Linear(self.hidden_dim, self.hidden_dim),
+            nn.Linear(self.hidden_dim, self.hidden_dim, device=self.device),
             nn.ReLU(),
-            nn.Linear(self.hidden_dim, self.sleep_action_dim)
+            nn.Linear(self.hidden_dim, self.sleep_action_dim, device=self.device)
         )
 
     def forward(self, ue_states, ue_slice_ids=None, qos_targets=None):
@@ -66,6 +67,7 @@ class SGRPOPolicy(nn.Module):
         """
         batch_size, num_ues, _ = ue_states.shape
         assert batch_size == BATCH_SIZE, f"Batch size must be {BATCH_SIZE}"
+        ue_states = ue_states.to(self.device)
         encoded = self.encoder(ue_states)  # [BATCH_SIZE, num_ues, hidden_dim]
         encoded = encoded.squeeze(0)  # [num_ues, hidden_dim]
         

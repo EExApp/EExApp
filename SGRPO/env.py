@@ -42,15 +42,12 @@ class OranEnv(gym.Env):
         self.N_sf = N_sf or config.ENV['N_sf']
         self.user_num = user_num or config.ENV['user_num']
         
-        # Map UE IDs to their respective slices using modulo operation
-        self.ue_slice_map = {}
-        for ue_id in range(1, self.user_num + 1):
-            if ue_id % 3 == 1:  # eMBB slice
-                self.ue_slice_map[ue_id] = 'embb'
-            elif ue_id % 3 == 2:  # uRLLC slice
-                self.ue_slice_map[ue_id] = 'urllc'
-            else:  # mMTC slice
-                self.ue_slice_map[ue_id] = 'mmtc'
+        # Map UE order (0-based index) to their respective slices using cyclic assignment
+        self.ue_order_slice_map = {}
+        slice_names = ['embb', 'urllc', 'mmtc']
+        for ue_order in range(self.user_num):
+            slice_idx = ue_order % self.num_slices
+            self.ue_order_slice_map[ue_order] = slice_names[slice_idx]
         
         # State space: 17-dimensional features (10 MAC metrics + 7 KPM metrics) - per UE
         # specification from openai gym
@@ -100,9 +97,9 @@ class OranEnv(gym.Env):
         assert len(self.qos_targets) == self.num_slices, "Mismatch between num_slices and qos_targets!"
     
     
-    def get_slice_type(self, ue_id):
-        """Get slice type for a given UE ID using modulo operation"""
-        return self.ue_slice_map[ue_id]
+    def get_slice_type(self, ue_order):
+        """Get slice type for a given UE order (0-based index) using cyclic assignment"""
+        return self.ue_order_slice_map[ue_order]
     
     def get_UEmac_layer_info(self, ue_id):
         """Get MAC layer metrics for a UE from SQLite database"""
@@ -166,39 +163,50 @@ class OranEnv(gym.Env):
         conn.close()
     
     
-    def get_UEkpm_info(self, ue_id):
-        '''ue_id, DRB_pdcpSduVolumeDL, DRB_pdcpSduVolumeUL, DRB_RlcSduDelayDL(us), DRB_UEThpDL, DRB_UEThpUL, RRU_PrbTotDL(kbps), RRU_PrbTotUL '''
-        print(f"Getting KPM data for UE {ue_id}...")
+    def get_UEkpm_info(self, ue_order):
+        '''Read KPM data for UE by order (position in file) instead of UE ID
+        ue_order: 0-based index indicating the position in the file
+        Returns: [ue_id, DRB_pdcpSduVolumeDL, DRB_pdcpSduVolumeUL, DRB_RlcSduDelayDL(us), DRB_UEThpDL, DRB_UEThpUL, RRU_PrbTotDL(kbps), RRU_PrbTotUL]'''
+        print(f"Getting KPM data for UE order {ue_order}...")
         data_ueid = []
         
         while True:
             with open(self.kpm_file, 'r') as file:
                 lines = file.readlines()[-self.user_num:]  # Read last user_num lines
                 
-            for line in lines:
+            # Read data by order (position) instead of by UE ID
+            if ue_order < len(lines):
+                line = lines[ue_order]  # Get the line at position ue_order
                 data = [float(x) for x in line.split()]
-                if int(data[0]) == ue_id:
+                if len(data) >= 8:
                     data_ueid = data
+                    print(f"Retrieved KPM data for UE order {ue_order} (UE ID {int(data[0])}): {data_ueid}")
+                else:
+                    print(f"KPM data incomplete for UE order {ue_order}, retrying...")
+                    continue
+            else:
+                print(f"UE order {ue_order} out of range, retrying...")
+                continue
                         
             if len(data_ueid) < 8:
-                print(f"KPM data incomplete for UE {ue_id}, retrying...")
+                print(f"KPM data incomplete for UE order {ue_order}, retrying...")
                 continue
             else:
-                if data_ueid == self.last_kpm_states[ue_id-1] and data_ueid[4] != 0:
-                    print(f"KPM data unchanged for UE {ue_id}, retrying...")
+                if data_ueid == self.last_kpm_states[ue_order] and data_ueid[4] != 0:
+                    print(f"KPM data unchanged for UE order {ue_order}, retrying...")
                     continue
                 else:
-                    self.last_kpm_states[ue_id-1] = copy.deepcopy(data_ueid)
+                    self.last_kpm_states[ue_order] = copy.deepcopy(data_ueid)
                     self.kpm_state = data_ueid
-                    print(f"Retrieved KPM data for UE {ue_id}: {data_ueid}")
+                    print(f"Retrieved KPM data for UE order {ue_order} (UE ID {int(data_ueid[0])}): {data_ueid}")
                 break
                     
     
-    def get_state(self, ue_id):
+    def get_state(self, ue_order):
         """Get complete state vector for a UE with normalized metrics"""
         
-        self.get_UEmac_layer_info(ue_id)
-        self.get_UEkpm_info(ue_id)
+        self.get_UEmac_layer_info(ue_order + 1)  # ue_order + 1 for MAC (still uses UE ID)
+        self.get_UEkpm_info(ue_order)  # ue_order for KPM (uses order)
         
         # Get raw MAC and KPM data
         raw_mac = list(self.mac_state[0])
@@ -262,7 +270,7 @@ class OranEnv(gym.Env):
         self.DRB_Delay = []
         self.BLER = []
         self.RRU_PrbTotDL = []
-        for i in range(1, self.user_num + 1):
+        for i in range(self.user_num):  # Use UE order (0-based) instead of UE ID
             complete_state, ue_mac_i, ue_kpm_i = self.get_state(i)
             self.UE_MAC.append(ue_mac_i)
             self.UE_KPM.append(ue_kpm_i)
@@ -428,7 +436,7 @@ class OranEnv(gym.Env):
         penalty_p = 0.0
         for s_idx, slice_name in enumerate(['embb', 'urllc', 'mmtc']):
             P_s = qos_targets[s_idx]['throughput']
-            users_in_slice = [i for i in range(self.user_num) if self.get_slice_type(i+1) == slice_name]
+            users_in_slice = [i for i in range(self.user_num) if self.get_slice_type(i) == slice_name]
             for k in users_in_slice:
                 p_tk = current_throughput[k]
                 drb_pdcp_volume_dl = self.UE_KPM[k][0] 
@@ -445,7 +453,7 @@ class OranEnv(gym.Env):
         penalty_d = 0.0
         for s_idx, slice_name in enumerate(['embb', 'urllc', 'mmtc']):
             D_s = qos_targets[s_idx]['delay']  # Required delay for this slice
-            users_in_slice = [i for i in range(self.user_num) if self.get_slice_type(i+1) == slice_name]
+            users_in_slice = [i for i in range(self.user_num) if self.get_slice_type(i) == slice_name]
             
             for k in users_in_slice:
                 d_tk = current_delay[k]
@@ -467,45 +475,16 @@ class OranEnv(gym.Env):
     
     def reset(self, group_size=1):
         """
-        Reset the environment by writing random valid actions to all group control files.
-        Slicing actions sum to 100, sleep actions sum to 7 with b_t < 5 constraint.
-        All files set to flag=1 (ready).
+        Reset the environment by writing fixed initial actions to all group control files.
+        All files set to (40, 30, 30, 4, 0, 3, 1) and flag=1 (ready).
         Only call this once at the beginning of training.
         Returns the initial state.
         """
-
         for g in range(group_size):
-            slicing = np.random.dirichlet(np.ones(3)) * 100
-            slicing_ints = [int(round(x)) for x in slicing]
-            slicing_ints[2] = 100 - slicing_ints[0] - slicing_ints[1]
-            
-            # Generate sleep actions with b_t < 5 constraint
-            max_attempts = 100
-            for attempt in range(max_attempts):
-                sleep = np.random.dirichlet(np.ones(3)) * 7
-                sleep_ints = [int(round(x)) for x in sleep]
-                sleep_ints[2] = 7 - sleep_ints[0] - sleep_ints[1]
-                
-                # Check if b_t < 5 constraint is satisfied
-                if sleep_ints[1] < 5:  # b_t is at index 1
-                    break
-                
-                # If constraint not satisfied and this is the last attempt, force b_t = 4
-                if attempt == max_attempts - 1:
-                    sleep_ints[1] = 4  # Force b_t = 4
-                    remaining = 7 - sleep_ints[0] - 4
-                    if remaining > 0:
-                        sleep_ints[2] = remaining
-                    else:
-                        sleep_ints[0] = max(0, sleep_ints[0] + remaining)
-                        sleep_ints[2] = 0
-                    print(f"Warning: Could not satisfy b_t < 5 constraint in reset, forcing b_t = 4")
-            
-            flag = 1
             file_name = f'../trandata/slice_ctrl_{g}.bin'
+            init_numbers = (40, 30, 30, 4, 0, 3, 1)
             with open(file_name, 'wb') as f:
-                f.write(struct.pack('iiiiiii', *(slicing_ints + sleep_ints + [flag])))
-        
+                f.write(struct.pack('iiiiiii', *init_numbers))
         # Return initial state
         return self.get_all_state()
 
@@ -532,8 +511,8 @@ class OranEnv(gym.Env):
         # Map slice names to indices
         slice_type_to_idx = {'embb': 0, 'urllc': 1, 'mmtc': 2}
         user_slice_ids = []
-        for ue_id in range(1, self.user_num + 1):
-            slice_name = self.get_slice_type(ue_id)
+        for ue_order in range(self.user_num):  # Use UE order (0-based)
+            slice_name = self.get_slice_type(ue_order)
             user_slice_ids.append(slice_type_to_idx[slice_name])
         return torch.tensor(user_slice_ids, dtype=torch.long)
 

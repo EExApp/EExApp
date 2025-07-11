@@ -8,30 +8,30 @@ class TransformerStateEncoder(nn.Module):
     Input: [batch_size, num_ues, num_features]
     Output: [batch_size, num_ues, hidden_dim]
     """
-    def __init__(self, num_features=None, hidden_dim=None, num_layers=None, num_heads=None, dropout=None):
+    def __init__(self, device=None):
         super().__init__()
-        self.num_features = num_features or config.STATE_ENCODER['num_features']
-        self.hidden_dim = hidden_dim or config.STATE_ENCODER['hidden_dim']
-        self.num_layers = num_layers or config.STATE_ENCODER['num_layers']
-        self.num_heads = num_heads or config.STATE_ENCODER['num_heads']
-        self.dropout = dropout or config.STATE_ENCODER['dropout']
-
-        self.input_proj = nn.Linear(self.num_features, self.hidden_dim)
-        encoder_layer = nn.TransformerEncoderLayer(
+        self.device = device if device is not None else torch.device('cpu')
+        self.input_dim = config.STATE_ENCODER['num_features']
+        self.hidden_dim = config.STATE_ENCODER['hidden_dim']
+        self.num_layers = config.STATE_ENCODER['num_layers']
+        self.num_heads = config.STATE_ENCODER['num_heads']
+        self.dropout = config.STATE_ENCODER['dropout']
+        self.encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.hidden_dim,
             nhead=self.num_heads,
-            dim_feedforward=self.hidden_dim * 2,
             dropout=self.dropout,
-            activation='relu',
-            batch_first=True
+            batch_first=True,
+            device=self.device
         )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=self.num_layers)
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=self.num_layers)
+        self.input_proj = nn.Linear(self.input_dim, self.hidden_dim, device=self.device)
 
     def forward(self, x):
         """
         x: [batch_size, num_ues, num_features]
         returns: [batch_size, num_ues, hidden_dim]
         """
+        x = x.to(self.device)
         x_proj = self.input_proj(x)
         # No mask: all UEs are valid
         encoded = self.transformer_encoder(x_proj)

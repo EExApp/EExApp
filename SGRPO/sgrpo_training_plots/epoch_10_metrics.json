@@ -1,18 +1,18 @@
 {
   "epoch": 10,
-  "timestamp": "2025-07-07T10:32:57.352242",
+  "timestamp": "2025-07-09T22:30:34.106354",
   "training_metrics": {
-    "ep_ret": 21.55,
+    "ep_ret": 16.666666666666668,
     "ep_len": 6,
-    "pi_loss": 0.059521377086639404,
-    "kl_div": 0.05570860579609871,
-    "entropy": -40.397762298583984,
-    "clip_frac": 0.8333333134651184,
-    "group_adv_mean": 9.955766677856445,
-    "group_adv_std": 0.11482448130846024,
-    "policy_updated": true,
-    "action_diversity_slice": 1.0045346021652222,
-    "action_diversity_sleep": 0.9594009547954677
+    "pi_loss": 331.2743225097656,
+    "kl_div": 417.759521484375,
+    "entropy": -2446.017578125,
+    "clip_frac": 1.0,
+    "group_adv_mean": 8.333333015441895,
+    "group_adv_std": 3.7267799377441406,
+    "policy_updated": false,
+    "action_diversity_slice": 0.4136756360530853,
+    "action_diversity_sleep": 1.0512974117174434
   },
   "network_metrics": {},
   "action_metrics": {

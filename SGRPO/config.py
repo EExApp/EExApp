@@ -46,21 +46,25 @@ class Config:
     
     # SGRPO training configuration
     SGRPO = {
-        'steps_per_epoch': 10,    # Number of state-action-reward transitions per epoch
+        'steps_per_epoch': 100,    # Number of state-action-reward transitions per epoch
         'epochs': 100,              # Number of epochs
         'gamma': 0.99,              # Discount factor (if needed for future extensions)
         'clip_ratio': 0.1,          # PPO/GRPO clip ratio
-        'pi_lr': 1e-5,              # Reduced learning rate for stability
+        'pi_lr': 1e-5,              # Lower initial learning rate for stability
         'train_pi_iters': 5,        # More frequent policy updates
         'max_ep_len': 100,         # Maximum episode length
-        'target_kl': 1,           # Much higher target KL to allow more updates
+        'target_kl': 0.1,           # Lowered target KL for more stable PPO/GRPO updates, 0.05 - 0.1
         'save_freq': 10,            # Model save frequency (epochs)
         'epsilon': 0.05,            # Reduced clipping parameter for more conservative updates
-        'beta_kl': 0.2,             # Increased KL penalty coefficient for stability
+        'beta_kl': 0.5,              # Increased KL penalty coefficient for stability 0.5 -1
         'group_size': 6,            # Number of actions to sample per group (G)
         'max_grad_norm': 0.5,       # Gradient clipping norm
-        'entropy_coef': 0.01,       # Entropy regularization coefficient
+        'entropy_coef': 0.05,       # Entropy regularization coefficient. Increase to 0.05, avoid premature entropy collapse
         'max_wait_time': 5.0,       # Maximum wait time for environment (seconds)
+        'min_lr': 1e-6,             # Minimum learning rate floor
+        'decay_rate': 0.995,       # Global exponential decay rate for learning rate
+        'warmup_epochs': 3,         # Number of epochs to allow warmup (no early stop)
+        'kl_warmup_epochs': 10,     # Number of epochs to ramp up KL penalty and anneal entropy
     }
     
     # Action space configuration
@@ -102,6 +106,9 @@ class Config:
             'prb_tot_ul': (0, 1000)            # 0-1000 PRBs
         }
     }
+
+    # Device selection for torch
+    DEVICE = 'cpu'  # Options: 'auto', 'cpu', 'cuda'
 
 # Create global config instance
 config = Config() 

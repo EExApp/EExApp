@@ -6,6 +6,12 @@ import json
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
 import warnings
+import torch
+from config import config
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if getattr(config, 'DEVICE', 'auto') == 'auto' else torch.device(config.DEVICE)
+# Use device for any tensor/model creation if needed
+
 warnings.filterwarnings('ignore')
 
 def to_serializable(obj):
@@ -172,30 +178,26 @@ class SGRPOVisualizer:
         
         # Row 1: Core Training Metrics
         if self.metrics['ep_ret']:
-            # Use step indices for step-level metrics
-            step_indices = list(range(len(self.metrics['ep_ret'])))
-            axes[0, 0].plot(step_indices, self.metrics['ep_ret'], 'b-', linewidth=2, label='Episode Return')
+            axes[0, 0].plot(self.metrics['epoch'], self.metrics['ep_ret'], 'b-', linewidth=2, label='Episode Return')
             axes[0, 0].set_title('Episode Returns')
-            axes[0, 0].set_xlabel('Step')
+            axes[0, 0].set_xlabel('Epoch')
             axes[0, 0].set_ylabel('Return')
             axes[0, 0].grid(True, alpha=0.3)
             axes[0, 0].legend()
         
         if self.metrics['pi_loss']:
-            step_indices = list(range(len(self.metrics['pi_loss'])))
-            axes[0, 1].plot(step_indices, self.metrics['pi_loss'], 'r-', linewidth=2, label='Policy Loss')
+            axes[0, 1].plot(self.metrics['epoch'], self.metrics['pi_loss'], 'r-', linewidth=2, label='Policy Loss')
             axes[0, 1].set_title('Policy Loss')
-            axes[0, 1].set_xlabel('Step')
+            axes[0, 1].set_xlabel('Epoch')
             axes[0, 1].set_ylabel('Loss')
             axes[0, 1].grid(True, alpha=0.3)
             axes[0, 1].legend()
         
         if self.metrics['kl_div']:
-            step_indices = list(range(len(self.metrics['kl_div'])))
-            axes[0, 2].plot(step_indices, self.metrics['kl_div'], 'g-', linewidth=2, label='KL Divergence')
+            axes[0, 2].plot(self.metrics['epoch'], self.metrics['kl_div'], 'g-', linewidth=2, label='KL Divergence')
             axes[0, 2].axhline(y=0.01, color='r', linestyle='--', alpha=0.7, label='Target KL')
             axes[0, 2].set_title('KL Divergence')
-            axes[0, 2].set_xlabel('Step')
+            axes[0, 2].set_xlabel('Epoch')
             axes[0, 2].set_ylabel('KL Divergence')
             axes[0, 2].grid(True, alpha=0.3)
             axes[0, 2].legend()
@@ -485,31 +487,27 @@ class SGRPOVisualizer:
         plt.figure(figsize=(12, 8))
         plt.subplot(2, 2, 1)
         if metrics['ep_ret']:
-            step_indices = list(range(len(metrics['ep_ret'])))
-            plt.plot(step_indices, metrics['ep_ret'], label='Episode Return')
+            plt.plot(metrics['epoch'], metrics['ep_ret'], label='Episode Return')
         plt.title('Episode Return')
-        plt.xlabel('Step')
+        plt.xlabel('Epoch')
         plt.legend()
         plt.subplot(2, 2, 2)
         if metrics['pi_loss']:
-            step_indices = list(range(len(metrics['pi_loss'])))
-            plt.plot(step_indices, metrics['pi_loss'], label='Policy Loss')
+            plt.plot(metrics['epoch'], metrics['pi_loss'], label='Policy Loss')
         plt.title('Policy Loss')
-        plt.xlabel('Step')
+        plt.xlabel('Epoch')
         plt.legend()
         plt.subplot(2, 2, 3)
         if metrics['kl_div']:
-            step_indices = list(range(len(metrics['kl_div'])))
-            plt.plot(step_indices, metrics['kl_div'], label='KL Divergence')
+            plt.plot(metrics['epoch'], metrics['kl_div'], label='KL Divergence')
         plt.title('KL Divergence')
-        plt.xlabel('Step')
+        plt.xlabel('Epoch')
         plt.legend()
         plt.subplot(2, 2, 4)
         if metrics['entropy']:
-            step_indices = list(range(len(metrics['entropy'])))
-            plt.plot(step_indices, metrics['entropy'], label='Policy Entropy')
+            plt.plot(metrics['epoch'], metrics['entropy'], label='Policy Entropy')
         plt.title('Policy Entropy')
-        plt.xlabel('Step')
+        plt.xlabel('Epoch')
         plt.legend()
         plt.tight_layout()
         if save:
@@ -520,10 +518,9 @@ class SGRPOVisualizer:
         # Clipping fraction
         if metrics['clip_frac']:
             plt.figure()
-            step_indices = list(range(len(metrics['clip_frac'])))
-            plt.plot(step_indices, metrics['clip_frac'], label='Clipping Fraction')
+            plt.plot(metrics['epoch'], metrics['clip_frac'], label='Clipping Fraction')
             plt.title('Clipping Fraction')
-            plt.xlabel('Step')
+            plt.xlabel('Epoch')
             plt.legend()
             if save:
                 plt.savefig(f'{self.save_dir}/clip_fraction.png')

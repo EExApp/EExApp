@@ -14,10 +14,14 @@ from datetime import datetime
 import struct
 import traceback
 
-def train_sgrpo():
+# Device selection based on config
+if getattr(config, 'DEVICE', 'auto') == 'auto':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
-    
+else:
+    device = torch.device(config.DEVICE)
+print(f"Using device: {device}")
+
+def train_sgrpo():
     try:
         env = OranEnv()
         policy = SGRPOPolicy().to(device)
@@ -31,6 +35,9 @@ def train_sgrpo():
         target_kl = config.SGRPO['target_kl']
         save_freq = config.SGRPO['save_freq']
         G = config.SGRPO['group_size']  # Number of actions per group
+
+        warmup_epochs = config.SGRPO['warmup_epochs']
+        kl_warmup_epochs = config.SGRPO['kl_warmup_epochs']
 
         print(f"Starting SGRPO training for {epochs} epochs with {steps_per_epoch} steps per epoch")
         print(f"Configuration: G={G}, target_kl={target_kl}, epsilon={epsilon}, beta_kl={beta_kl}")
@@ -47,10 +54,19 @@ def train_sgrpo():
             'policy_updated': [],
             'action_diversity_slice': [],
             'action_diversity_sleep': [],
-            'timestamp': []
+            'timestamp': [],
+            'learning_rate': []
         }
 
         for epoch in range(epochs):
+            # Dynamic KL penalty and entropy bonus scheduling
+            if epoch < kl_warmup_epochs:
+                beta_kl = config.SGRPO['beta_kl'] * (epoch + 1) / kl_warmup_epochs  # Linear ramp-up
+                entropy_coef = config.SGRPO['entropy_coef'] * (1 - epoch / kl_warmup_epochs) + 0.01 * (epoch / kl_warmup_epochs)  # Anneal to 0.01
+            else:
+                beta_kl = config.SGRPO['beta_kl']
+                entropy_coef = 0.01
+
             print(f"\n{'='*60}")
             print(f"Starting Epoch {epoch+1}/{epochs}")
             print(f"{'='*60}")
@@ -111,6 +127,17 @@ def train_sgrpo():
                         # Compute group-normalized advantages for the G actions
                         group_rewards_tensor = torch.tensor(group_rewards, dtype=torch.float32, device=device)
                         mean, std, advantages = group_normalize(group_rewards_tensor)
+                        print(f"[DEBUG] Step {step+1} | Advantage mean: {mean.item():.4f}, std: {std.item():.4f}")
+                        
+                        # --- Learning Rate Adjustment Scheme ---
+                        # 1. Warm-up phase (first N epochs)
+                        if epoch < warmup_epochs:
+                            lr = config.SGRPO['pi_lr'] * 0.5
+                        else:
+                            # 2. Global long-term schedule
+                            lr = config.SGRPO['pi_lr'] * (config.SGRPO['decay_rate'] ** epoch)
+                        
+                        print(f"[DEBUG] Step {step+1} | Initial LR: {lr:.6e} | Epoch: {epoch+1}")
                         
                         # Additional advantage normalization for stability (added)
                         if std > 0:
@@ -155,60 +182,76 @@ def train_sgrpo():
                         sleep_kl = kl_divergence(sleep_logps_old, sleep_logps_new).mean()
                         total_kl = slicing_kl + sleep_kl
                         
-                        # Final loss with additional regularization for stability (added)
-                        entropy_coef = config.SGRPO.get('entropy_coef', 0.01)
-                        entropy_bonus = entropy_coef * (slicing_logps_new.mean() + sleep_logps_new.mean())  # Encourage exploration
-                        loss = -joint_obj.mean() + beta_kl * total_kl - entropy_bonus
+                        # 3. Short-term KL-based correction (per update)
+                        if total_kl < 0.5 * target_kl:
+                            pass  # no change
+                        elif total_kl < target_kl:
+                            lr *= 0.95
+                        elif total_kl < 2 * target_kl:
+                            lr *= 0.5
+                        else:
+                            lr *= 0.1
+                        # 4. Learning rate floor
+                        lr = max(lr, config.SGRPO['min_lr'])
                         
-                        # Policy update (only if KL divergence is acceptable)
-                        if total_kl < target_kl:
+                        print(f"[DEBUG] Step {step+1} | Final LR after KL correction: {lr:.6e} | KL: {total_kl.item():.4f}")
+                        
+                        # Final loss with additional regularization for stability (added)
+                        # entropy_coef is now dynamic
+                        entropy_bonus = entropy_coef * (slicing_logps_new.mean() + sleep_logps_new.mean())  # Encourage exploration
+                        
+                        # KL-based update tiers (refined hybrid strategy)
+                        tier = None
+                        kl_penalty = beta_kl * total_kl  # default linear penalty
+                        loss_to_use = -joint_obj.mean() + kl_penalty - entropy_bonus
+                        do_update = True
+                        if total_kl < target_kl * 0.5:
+                            # Safe: Normal update
+                            tier = 'SAFE'
+                            lr_scale = 1.0
+                            grad_clip = 0.5
+                        elif total_kl < target_kl:
+                            # Warning: Slight LR decay
+                            tier = 'WARNING'
+                            lr_scale = 0.95
+                            grad_clip = 0.5
+                        elif total_kl < target_kl * 2.0:
+                            # Risk: Decayed LR + aggressive grad clipping
+                            tier = 'RISK'
+                            lr_scale = 0.5
+                            grad_clip = 0.2
+                        elif total_kl < target_kl * 5.0:
+                            # Danger: Allow update but with strong quadratic KL penalty
+                            tier = 'DANGER'
+                            grad_clip = 0.1
+                            # Quadratic KL penalty for strong suppression
+                            kl_penalty = beta_kl * (total_kl - target_kl) ** 2
+                            loss_to_use = -joint_obj.mean() + kl_penalty - entropy_bonus
+                            print(f"[SGRPO][DANGER] KL={total_kl.item():.4f} in [2x,5x] target, applying strong KL penalty!")
+                        else:
+                            # Catastrophic: Skip update, restore LR, log
+                            tier = 'CATASTROPHIC'
+                            do_update = False
+                            for param_group in optimizer.param_groups:
+                                param_group['lr'] = max(config.SGRPO['min_lr'], config.SGRPO['pi_lr'])
+                            print(f"[SGRPO][CATASTROPHIC] KL={total_kl.item():.4f} > 5x target, skipping update and resetting LR!")
+                            # Only early stop after warmup epochs
+                            if epoch >= warmup_epochs and step > 10:
+                                break
+                        
+                        # Apply the calculated learning rate to optimizer
+                        for param_group in optimizer.param_groups:
+                            param_group['lr'] = lr
+                        
+                        if do_update:
                             optimizer.zero_grad()
-                            loss.backward()
-                            # Add gradient clipping for stability
-                            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=0.5)
+                            loss_to_use.backward()
+                            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=grad_clip)
                             optimizer.step()
                             policy_updated = True
-                            
-                            # Adaptive learning rate based on KL divergence (added)
-                            if total_kl > target_kl * 0.5:  # If KL is getting close to limit
-                                for param_group in optimizer.param_groups:
-                                    param_group['lr'] = max(param_group['lr'] * 0.95, config.SGRPO['pi_lr'] * 0.1)
-                        elif total_kl < target_kl * 2.5:  # Allow updates with moderate KL
-                            # Use smaller learning rate for high KL updates
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = config.SGRPO['pi_lr'] * 0.5
-                            optimizer.zero_grad()
-                            loss.backward()
-                            # Add gradient clipping for stability
-                            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=0.3)
-                            optimizer.step()
-                            # Restore original learning rate
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = config.SGRPO['pi_lr']
-                            policy_updated = True
-                            print(f"Warning: Moderate KL update (KL={total_kl:.4f}) with reduced LR")
-                        elif total_kl < target_kl * 5:  # Allow updates even with high KL for escape
-                            # Use much smaller learning rate for very high KL updates
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = config.SGRPO['pi_lr'] * 0.1
-                            optimizer.zero_grad()
-                            loss.backward()
-                            # Add gradient clipping for stability
-                            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=0.1)
-                            optimizer.step()
-                            # Restore original learning rate
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = config.SGRPO['pi_lr']
-                            policy_updated = True
-                            print(f"Warning: High KL update (KL={total_kl:.4f}) with much reduced LR")
                         else:
                             policy_updated = False
-                            print(f"Warning: Extremely high KL (KL={total_kl:.4f}), skipping update")
-                            
-                            # Early stopping if KL is consistently too high (added)
-                            if step > 10 and total_kl > target_kl * 10:
-                                print(f"Early stopping due to consistently high KL divergence")
-                                break
+                        print(f"[SGRPO][KL-TIER] Epoch {epoch+1} | Step {step+1} | KL={total_kl.item():.4f} | Tier={tier} | PolicyUpdated={policy_updated} | LR={optimizer.param_groups[0]['lr']:.2e}")
                         
                         # SGRPO-specific logging
                         update_status = "UPDATED" if policy_updated else "SKIPPED"
@@ -219,13 +262,13 @@ def train_sgrpo():
                         slicing_std = np.std(slicing_actions_array, axis=0).mean()
                         sleep_std = np.std(sleep_actions_array, axis=0).mean()
                         
-                        print(f"[SGRPO] Epoch {epoch+1} | Step {step+1} | Loss: {loss.item():.4f} | KL: {total_kl.item():.4f} | Return: {np.mean(group_rewards):.2f} | GroupAdv mean: {mean.item():.4f} std: {std.item():.4f} | Policy: {update_status} | Action_std: slice={slicing_std:.2f} sleep={sleep_std:.2f}")
+                        print(f"[SGRPO] Epoch {epoch+1} | Step {step+1} | Loss: {loss_to_use.item():.4f} | KL: {total_kl.item():.4f} | Return: {np.mean(group_rewards):.2f} | GroupAdv mean: {mean.item():.4f} std: {std.item():.4f} | Policy: {update_status} | Action_std: slice={slicing_std:.2f} sleep={sleep_std:.2f}")
                         
                         # Store metrics for this step
                         training_metrics = {
                             'ep_ret': float(np.mean(group_rewards)),
                             'ep_len': int(G),
-                            'pi_loss': float(loss.item()),
+                            'pi_loss': float(loss_to_use.item()),
                             'kl_div': float(total_kl.item()),
                             'entropy': float((slicing_logps_new.mean() + sleep_logps_new.mean()).item()),
                             'clip_frac': float(((joint_ratio > clip_high) | (joint_ratio < clip_low)).float().mean().item()),
@@ -234,6 +277,7 @@ def train_sgrpo():
                             'policy_updated': policy_updated,
                             'action_diversity_slice': float(slicing_std),
                             'action_diversity_sleep': float(sleep_std),
+                            'learning_rate': float(lr),
                         }
                         
                         # Network performance metrics
@@ -257,13 +301,14 @@ def train_sgrpo():
                         step_metrics['action_diversity_slice'].append(training_metrics['action_diversity_slice'])
                         step_metrics['action_diversity_sleep'].append(training_metrics['action_diversity_sleep'])
                         step_metrics['timestamp'].append(datetime.now().isoformat())
+                        step_metrics['learning_rate'].append(float(lr))
                         
                         # Save step metrics to file every 10 steps
                         if (step + 1) % 10 == 0:
                             step_metrics_path = os.path.join('sgrpo_training_plots', f'step_metrics_epoch_{epoch+1}.json')
                             with open(step_metrics_path, 'w') as f:
                                 json.dump(step_metrics, f, indent=2)
-                            print(f"Step metrics saved: {step_metrics_path}")
+                            print(f"[DEBUG] Step metrics saved: {step_metrics_path}")
                         
                     except Exception as step_error:
                         print(f"Error in step {step+1} of epoch {epoch+1}: {step_error}")
@@ -277,12 +322,15 @@ def train_sgrpo():
                 }
                 
                 # Record metrics ONCE per epoch (not per step)
+                print(f"[DEBUG] Updating epoch {epoch+1} metrics...")
                 visualizer.update_metrics(epoch, training_metrics, network_metrics, action_metrics)
                 
                 # Generate plots and save metrics at the end of the epoch
+                print(f"[DEBUG] Saving metrics and generating plots for epoch {epoch+1}...")
                 visualizer.save_metrics()
                 visualizer.generate_all_plots(epoch)
                 visualizer.print_summary(epoch)
+                print(f"[DEBUG] Completed epoch {epoch+1} metrics and plots")
 
                 # PPO-style reference model update: update old_policy at the end of epoch
                 old_policy = copy.deepcopy(policy).to(device)
@@ -299,7 +347,7 @@ def train_sgrpo():
                         'training_metrics': training_metrics,
                         'network_metrics': network_metrics,
                         'config': config.__dict__,
-                        'loss': loss.item(),
+                        'loss': loss_to_use.item(),
                         'kl_div': total_kl.item(),
                         'ep_ret': np.mean(group_rewards),
                     }, model_path)
@@ -311,7 +359,7 @@ def train_sgrpo():
                         'training_metrics': training_metrics,
                         'network_metrics': network_metrics,
                         'config': config.__dict__,
-                        'loss': loss.item(),
+                        'loss': loss_to_use.item(),
                         'kl_div': total_kl.item(),
                         'ep_ret': np.mean(group_rewards),
                     }, latest_model_path)
@@ -334,7 +382,7 @@ def train_sgrpo():
                     print(f"\n{'='*60}")
                     print(f"Detailed Progress - Epoch {epoch+1}")
                     print(f"{'='*60}")
-                    print(f"Training Loss: {loss.item():.6f}")
+                    print(f"Training Loss: {loss_to_use.item():.6f}")
                     print(f"KL Divergence: {total_kl.item():.6f}")
                     print(f"Episode Return: {np.mean(group_rewards):.4f}")
                     print(f"Group Advantage - Mean: {mean.item():.4f}, Std: {std.item():.4f}")

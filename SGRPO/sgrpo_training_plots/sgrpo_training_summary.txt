@@ -2,25 +2,25 @@
 SGRPO Training Summary Report
 ============================================================
 
-Training completed at: 2025-07-07 12:05:17
-Total epochs: 29
+Training completed at: 2025-07-10 16:09:22
+Total epochs: 5
 
-Final Episode Return: 20.0000
-Average Episode Return: 23.7770
-Best Episode Return: 33.2167
+Final Episode Return: 26.6667
+Average Episode Return: 26.6667
+Best Episode Return: 28.3333
 
-Final Policy Loss: 2.271839
-Average Policy Loss: 1.575059
+Final Policy Loss: 28.737637
+Average Policy Loss: 30.813685
 
-Final KL Divergence: 0.043640
-Average KL Divergence: 0.072172
+Final KL Divergence: 3.094811
+Average KL Divergence: 1.330542
 
 Network Performance Summary:
 ------------------------------
 
 
 
-Average Energy Efficiency: 0.3103
+Average Energy Efficiency: 0.3143
 Final Energy Efficiency: 0.2857
 
 Average Constraint Satisfaction: 1.0000

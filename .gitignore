@@ -3,9 +3,13 @@ ci-scripts/
 docker/
 trandata/
 myenv/
-algorithms/models
-algorithms/ppo_training_results
+algorithms/models/
+algorithms/ppo_training_results/
 algorithms/__pycache__
 swig/
+SGRPO/__pycache__/
+SGRPO/sgrpo_training_plots/
 
 compile_commands.json
+lujie2@35.9.28.119
+lujie2@inss-server.egr.msu.edu/
